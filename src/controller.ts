@@ -77,10 +77,14 @@ export class Controller {
     };
     const response = await this.fetch(url, options);
     if (response.status === 401) throw new AuthenticationError("Campus authorization expired");
-    if (!response.ok) throw new Error(`Campus controller returned HTTP ${response.status}`);
+    if (!response.ok)
+      throw new Error(
+        `Campus controller ${options.method} ${url.pathname} returned HTTP ${response.status}`,
+      );
 
     const result = object(await response.json());
-    if (result.code === "401") throw new AuthenticationError("Campus authorization expired");
+    if (result.code === "401" || result.code === "3010")
+      throw new AuthenticationError("Campus authorization expired");
     if (result.code !== "200") {
       const code =
         typeof result.code === "string" && /^[\w-]{1,32}$/.test(result.code) ?
@@ -100,14 +104,12 @@ export class Controller {
     if (!oidc) throw new Error("Server did not offer OIDC login");
     const url = new URL(text(oidc.loginUrl, "OIDC login URL"), this.origin);
     if (url.origin !== this.origin) throw new Error("SSO entry belongs to another server");
-    url.pathname += "-UES";
-    url.searchParams.set("blankwindow", "blank");
     return url;
   }
 
   async user(token: string): Promise<string> {
-    const user = await this.request("/enclient/api/users/info/get", token);
-    return text(user.account, "account");
+    const user = await this.request("/enclient/api/users/info", token);
+    return text(user.username, "username");
   }
 
   async rules(token: string): Promise<Record<string, unknown>> {

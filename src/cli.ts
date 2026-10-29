@@ -42,9 +42,9 @@ async function main(): Promise<void> {
       const url = await controller.loginUrl();
       console.log("Sign in on the school page. Authorization will be kept for 24 hours.");
       const credentials = await login(url, config.browser);
-      await controller.user(credentials.accessToken);
       await store.save(credentials);
       await saveConfig(config);
+      await controller.user(credentials.accessToken);
       console.log("Authorization saved. Run openenlink serve to connect.");
     } finally {
       await controller.close();

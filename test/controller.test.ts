@@ -27,7 +27,7 @@ await test("Controller signs the bytes it sends and uses the refresh token for r
     return Promise.resolve(
       Response.json({
         code: "200",
-        data: { account: "student", refreshToken: "new-refresh", token: "new-access" },
+        data: { username: "student", refreshToken: "new-refresh", token: "new-access" },
       }),
     );
   };
@@ -39,6 +39,7 @@ await test("Controller signs the bytes it sends and uses the refresh token for r
       refreshToken: "new-refresh",
     });
     assert.equal(new Headers(requests[0].options.headers).get("Authorization"), "Bearer access");
+    assert.equal(requests[0].url.pathname, "/enclient/api/users/info");
     assert.equal(new Headers(requests[1].options.headers).get("Authorization"), "Bearer refresh");
     assert.equal(requests[1].url.pathname, "/enclient/api/users/client/refreshToken");
     await assert.rejects(
@@ -76,6 +77,17 @@ await test("Controller distinguishes expired authorization from malformed replie
   );
 });
 
+await test("Controller recognizes expired sessions returned with HTTP 200", async () => {
+  const controller = new Controller("https://vpn.example.test", () =>
+    Promise.resolve(Response.json({ code: "3010", data: null })),
+  );
+  try {
+    await assert.rejects(controller.user("expired"), AuthenticationError);
+  } finally {
+    await controller.close();
+  }
+});
+
 await test("Browser completion accepts tokens only from the configured school origin", () => {
   const origin = "https://vpn.example.test";
   const encoded = Buffer.from("access-token").toString("base64");
@@ -90,4 +102,23 @@ await test("Browser completion accepts tokens only from the configured school or
     signature(new URL(origin), "", "", "1700000000000", "abcdefghijklmnop").now,
     "1700000000000",
   );
+});
+
+await test("Browser login uses the SSO entry advertised by the server", async () => {
+  const path = "/enclient/api/users/admin/custom/page/login/sso/OIDC";
+  const controller = new Controller("https://vpn.example.test", () =>
+    Promise.resolve(
+      Response.json({
+        code: "200",
+        data: { ssoLoginTypes: [{ hidden: false, loginType: "SSO_OIDC", loginUrl: path }] },
+      }),
+    ),
+  );
+  try {
+    const url = await controller.loginUrl();
+    assert.equal(url.pathname, path);
+    assert.equal(url.search, "");
+  } finally {
+    await controller.close();
+  }
 });
