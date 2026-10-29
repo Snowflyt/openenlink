@@ -44,12 +44,16 @@ await test(
     try {
       for (const path of ["/query", "/cookie"]) {
         const page = await browser.newPage();
+        const startedAt = Date.now();
         const credentials = await captureAuthorization(
           page,
           new URL(`http://127.0.0.1:${address.port}${path}`),
         );
         assert.equal(credentials.accessToken, "test-access-token");
         assert.equal(credentials.refreshToken, path === "/query" ? "test-refresh" : undefined);
+        const retention = 7 * 24 * 60 * 60 * 1000;
+        assert.ok(credentials.expiresAt >= startedAt + retention);
+        assert.ok(credentials.expiresAt <= Date.now() + retention);
         await page.waitForFunction(() =>
           document.body.textContent.includes("Authorization received"),
         );

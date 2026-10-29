@@ -40,7 +40,7 @@ async function main(): Promise<void> {
     const controller = new Controller(config.server);
     try {
       const url = await controller.loginUrl();
-      console.log("Sign in on the school page. Authorization will be kept for 24 hours.");
+      console.log("Sign in on the school page. Authorization will be kept for seven days.");
       const credentials = await login(url, config.browser);
       await store.save(credentials);
       await saveConfig(config);

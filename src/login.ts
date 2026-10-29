@@ -129,7 +129,7 @@ export async function captureAuthorization(page: Page, url: URL): Promise<Creden
           responseCode: 200,
           responseHeaders: [{ name: "Content-Type", value: "text/plain; charset=utf-8" }],
         });
-        credentials.resolve({ ...tokens, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
+        credentials.resolve({ ...tokens, expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 });
         return;
       }
 
