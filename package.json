@@ -1,0 +1,52 @@
+{
+  "name": "openenlink",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Connect to Enlink campus networks through a local SOCKS proxy.",
+  "license": "AGPL-3.0-or-later",
+  "author": "Ge Gao (Snowflyt) <gaoge011022@gmail.com>",
+  "type": "module",
+  "bin": {
+    "openenlink": "src/cli.ts"
+  },
+  "scripts": {
+    "commitlint": "commitlint --edit",
+    "format": "prettier --write \"**/*.{ts,js,cjs,json,md}\"",
+    "postinstall": "node -e \"import { execFileSync } from 'node:child_process'; import fs from 'node:fs'; const directory = 'node_modules/tcpip'; const metadata = JSON.parse(fs.readFileSync(directory + '/package.json', 'utf8')); if (metadata.version !== '0.4.0') throw new Error('Review the tcpip half-close fix for this version'); const file = directory + '/dist/index.js'; const source = fs.readFileSync(file, 'utf8'); const quote = String.fromCharCode(34); const broken = 'this.#o(),this.#r?.error(new Error(' + quote + 'tcp connection closed' + quote + '))'; fs.writeFileSync(file, source.replaceAll(broken, 'this.#o()')); if (fs.existsSync('.git')) execFileSync('git', ['config', 'core.hooksPath', '.githooks']);\"",
+    "lint": "eslint \"{src,test}/**/*.ts\" \"*.{js,cjs}\" --max-warnings 0",
+    "lint:fix": "eslint \"{src,test}/**/*.ts\" \"*.{js,cjs}\" --fix --max-warnings 0",
+    "start": "node src/cli.ts",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@napi-rs/keyring": "^2.1.2",
+    "puppeteer-core": "^25.16.0",
+    "tcpip": "0.4.0",
+    "undici": "^8.12.3"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.4",
+    "@eslint/js": "^10.0.1",
+    "@tcpip/dns": "^0.3.0",
+    "@types/node": "~26.6.6",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-jsdoc": "^64.5.4",
+    "eslint-plugin-prettier": "^5.5.7",
+    "eslint-plugin-sonarjs": "^4.2.2",
+    "eslint-plugin-sort-destructure-keys": "^3.0.0",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "prettier-plugin-packagejson": "^3.0.3",
+    "selfsigned": "^5.5.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "typescript7": "npm:@typescript/native-preview@^7.0.0-dev.20260707.2"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}
