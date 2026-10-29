@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@napi-rs/keyring": "^2.1.2",
+    "dns-packet": "^5.6.1",
     "puppeteer-core": "^25.16.0",
     "tcpip": "0.4.0",
     "undici": "^8.12.3"
@@ -29,6 +30,7 @@
     "@commitlint/cli": "^21.2.4",
     "@eslint/js": "^10.0.1",
     "@tcpip/dns": "^0.3.0",
+    "@types/dns-packet": "^5.6.5",
     "@types/node": "~26.6.6",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",

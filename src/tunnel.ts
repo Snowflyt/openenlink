@@ -16,7 +16,7 @@ import {
 } from "./protocol.ts";
 import type { Addresses } from "./protocol.ts";
 
-export type Gateway = { host: string; port: number; serverName?: string };
+export type Gateway = { host: string; port: number; serverName?: string; dns?: string };
 
 // RFC 2544 address used inside the virtual stack for campus loopback DNS.
 // eslint-disable-next-line sonarjs/no-hardcoded-ip
@@ -28,13 +28,13 @@ export class Tunnel {
   readonly stack: NetworkStack;
   private readonly socket: TLSSocket;
   private readonly controller = new AbortController();
-  private readonly dnsAlias: string;
+  readonly dnsServer: string;
 
   private constructor(socket: TLSSocket, addresses: Addresses, stack: NetworkStack) {
     this.socket = socket;
     this.addresses = addresses;
     this.stack = stack;
-    this.dnsAlias = addresses.dns.startsWith("127.") ? DNS_ALIAS : addresses.dns;
+    this.dnsServer = addresses.dns.startsWith("127.") ? DNS_ALIAS : addresses.dns;
   }
 
   static async connect(
@@ -59,6 +59,7 @@ export class Tunnel {
       const reader = new ByteReader(socket);
       await write(socket, authentication(user, token));
       const addresses = await readAuthentication(reader);
+      if (gateway.dns) addresses.dns = gateway.dns;
       const stack = await createStack({
         initializeLoopback: false,
         // lwIP routes 127/8 locally. An alias keeps campus loopback DNS on the tunnel.
@@ -101,7 +102,7 @@ export class Tunnel {
       while (!signal.aborted) {
         const packet = await outgoing.read();
         if (packet.done) return;
-        const data = rewriteAddress(packet.value, 16, this.dnsAlias, this.addresses.dns);
+        const data = rewriteAddress(packet.value, 16, this.dnsServer, this.addresses.dns);
         await write(this.socket, frame(4, 0x29000000, data));
       }
     };
@@ -109,7 +110,7 @@ export class Tunnel {
       while (!signal.aborted) {
         const packet = await readPacket(reader);
         if (packet.kind === 4) {
-          await writer.write(rewriteAddress(packet.body, 12, this.addresses.dns, this.dnsAlias));
+          await writer.write(rewriteAddress(packet.body, 12, this.addresses.dns, this.dnsServer));
         }
       }
     };

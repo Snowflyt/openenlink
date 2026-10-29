@@ -9,7 +9,7 @@ export type TunnelOptions = { gateway: Gateway; user: string; token: string; por
 const options = workerData as TunnelOptions;
 const tunnel = await Tunnel.connect(options.gateway, options.user, options.token);
 void tunnel.done.catch(() => {});
-const socks = await SocksServer.listen(tunnel.stack, options.port);
+const socks = await SocksServer.listen(tunnel.stack, tunnel.dnsServer, options.port);
 parentPort!.postMessage({ port: socks.port });
 
 try {

@@ -5,6 +5,7 @@ import type { Server, Socket } from "node:net";
 
 import type { NetworkStack, UdpSocket } from "tcpip";
 
+import { Resolver } from "./dns.ts";
 import { ByteReader, write } from "./protocol.ts";
 
 type Target = { host: string; port: number };
@@ -40,14 +41,21 @@ export class SocksServer {
     this.port = port;
   }
 
-  static async listen(stack: NetworkStack, port = 1088): Promise<SocksServer> {
+  static async listen(stack: NetworkStack, dns: string, port = 1088): Promise<SocksServer> {
     const clients = new Set<Socket>();
+    const resolver = new Resolver(stack, dns);
     const server = createServer({ allowHalfOpen: true }, (socket) => {
       clients.add(socket);
       socket.on("error", () => {});
       socket.once("close", () => clients.delete(socket));
       socket.setTimeout(15_000, () => socket.destroy());
-      void serve(socket, stack).catch(() => socket.destroy());
+      void serve(socket, stack, resolver).catch((error: unknown) => {
+        console.error(
+          "Campus SOCKS connection failed:",
+          error instanceof Error ? error.message : "Unknown error",
+        );
+        socket.destroy();
+      });
     });
 
     server.listen(port, "127.0.0.1");
@@ -65,7 +73,9 @@ export class SocksServer {
   }
 }
 
-async function serve(socket: Socket, stack: NetworkStack): Promise<void> {
+async function serve(socket: Socket, stack: NetworkStack, resolver: Resolver): Promise<void> {
+  const controller = new AbortController();
+  socket.once("close", () => controller.abort());
   const reader = new ByteReader(socket);
   const greeting = await reader.read(2);
   if (greeting[0] !== 5) {
@@ -90,7 +100,7 @@ async function serve(socket: Socket, stack: NetworkStack): Promise<void> {
 
   const destination = await target(reader, request[3]);
   if (request[1] === 3) {
-    await associate(socket, reader, stack, destination);
+    await associate(socket, reader, stack, resolver, controller.signal, destination);
     return;
   }
   if (request[1] !== 1) {
@@ -99,7 +109,8 @@ async function serve(socket: Socket, stack: NetworkStack): Promise<void> {
     return;
   }
 
-  const connection = await stack.tcp.connect(destination);
+  const host = await resolver.lookup(destination.host, controller.signal);
+  const connection = await stack.tcp.connect({ host, port: destination.port });
   if (socket.destroyed) {
     await connection.close();
     return;
@@ -131,6 +142,8 @@ async function associate(
   control: Socket,
   reader: ByteReader,
   stack: NetworkStack,
+  resolver: Resolver,
+  signal: AbortSignal,
   destination: Target,
 ): Promise<void> {
   const local = createSocket("udp4");
@@ -157,7 +170,9 @@ async function associate(
     if (clientPort === 0) clientPort = source.port;
     const port = packet.readUInt16BE(offset);
     const data = packet.subarray(offset + 2);
-    sendQueue = sendQueue.then(() => writer.write({ data, host, port }));
+    sendQueue = sendQueue.then(async () =>
+      writer.write({ data, host: await resolver.lookup(host, signal), port }),
+    );
     void sendQueue.catch(() => control.destroy());
   });
 

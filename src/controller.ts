@@ -2,6 +2,7 @@ import { createHash, randomInt } from "node:crypto";
 
 import { Agent } from "undici";
 
+import { ipv4Address } from "./protocol.ts";
 import type { Gateway } from "./tunnel.ts";
 
 export class AuthenticationError extends Error {}
@@ -152,7 +153,11 @@ export function tunnelRules(rules: Record<string, unknown>): {
       throw new Error("Controller returned an invalid gateway endpoint");
     }
     const host = endpoint.hostname.replace(/^\[|\]$/g, "");
-    return { host, port: Number(endpoint.port || 443), serverName: host };
+    const dns =
+      gateway.internalDnsResolveStatus === "true" ?
+        ipv4Address(text(gateway.dns, "campus DNS"))
+      : undefined;
+    return { host, port: Number(endpoint.port || 443), serverName: host, ...(dns ? { dns } : {}) };
   });
   if (!gateways.length) throw new Error("Controller returned no public gateways");
   return { gateways, token: text(rules.token, "tunnel token") };

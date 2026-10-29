@@ -88,6 +88,20 @@ await test("Controller recognizes expired sessions returned with HTTP 200", asyn
   }
 });
 
+await test("Gateway policy selects the internal campus DNS", () => {
+  const { gateways } = tunnelRules({
+    gateway_list: [
+      {
+        ip: "gateway.example.test:443||10.0.0.1||58679",
+        internalDnsResolveStatus: "true",
+        dns: "10.0.0.53",
+      },
+    ],
+    token: "tunnel",
+  });
+  assert.equal(gateways[0].dns, "10.0.0.53");
+});
+
 await test("Browser completion accepts tokens only from the configured school origin", () => {
   const origin = "https://vpn.example.test";
   const encoded = Buffer.from("access-token").toString("base64");

@@ -16,23 +16,35 @@ import { SocksServer } from "../src/socks.ts";
 import { Tunnel } from "../src/tunnel.ts";
 
 if (isMainThread) {
-  for (const dns of ["10.88.0.1", "127.0.0.1"])
-    await test(`SOCKS TCP and UDP with DNS ${dns}`, { timeout: 20_000 }, async (t) => {
-      // A worker owns the WASM stack and its timer for the lifetime of this tunnel.
-      const worker = new Worker(new URL(import.meta.url), { workerData: dns });
-      try {
-        const [result] = await once(worker, "message", { signal: t.signal });
-        assert.deepEqual(result, { dns: true, tcp: true, udp: true });
-      } finally {
-        await worker.terminate();
-      }
-    });
+  const cases = [
+    { dns: "10.88.0.1", compressed: false },
+    { dns: "127.0.0.1", compressed: false },
+    { dns: "10.88.0.1", compressed: true },
+  ];
+  for (const scenario of cases)
+    await test(
+      `SOCKS TCP and UDP with DNS ${JSON.stringify(scenario)}`,
+      { timeout: 20_000 },
+      async (t) => {
+        // A worker owns the WASM stack and its timer for the lifetime of this tunnel.
+        const worker = new Worker(new URL(import.meta.url), { workerData: scenario });
+        try {
+          const [result] = await once(worker, "message", { signal: t.signal });
+          assert.deepEqual(result, { dns: true, tcp: true, udp: true });
+        } finally {
+          await worker.terminate();
+        }
+      },
+    );
 } else {
   await exercise();
 }
 
 async function exercise(): Promise<void> {
-  const peerAddress = workerData as `${number}.${number}.${number}.${number}`;
+  const { compressed, dns: peerAddress } = workerData as {
+    compressed: boolean;
+    dns: `${number}.${number}.${number}.${number}`;
+  };
   const pems = await generate([{ name: "commonName", value: "gateway.test" }], {
     extensions: [
       { cA: true, name: "basicConstraints" },
@@ -41,13 +53,30 @@ async function exercise(): Promise<void> {
   });
   const peer = await createStack({ initializeLoopback: false });
   const nic = await peer.interfaces.createTun({ ip: "10.88.0.1/0" });
-  const dns = new DnsServer(peer.udp, {
-    request(query) {
-      assert.equal(query.name, "campus.test");
-      return Promise.resolve({ ip: "10.88.0.1", ttl: 60, type: "A" as const });
-    },
-  });
-  await dns.listen();
+  if (compressed) {
+    const dns = await peer.udp.open({ port: 53 });
+    void (async () => {
+      const writer = dns.writable.getWriter();
+      for await (const query of dns) {
+        const response = Buffer.concat([
+          query.data,
+          // The answer name points to the question, as in the live campus reply.
+          Buffer.from("c00c000100010000003c00040a580001", "hex"),
+        ]);
+        response.writeUInt16BE(0x8180, 2);
+        response.writeUInt16BE(1, 6);
+        await writer.write({ ...query, data: response });
+      }
+    })();
+  } else {
+    const dns = new DnsServer(peer.udp, {
+      request(query) {
+        assert.equal(query.name, "campus.test");
+        return Promise.resolve({ ip: "10.88.0.1", ttl: 60, type: "A" as const });
+      },
+    });
+    await dns.listen();
+  }
   const echo = await peer.tcp.listen({ port: 8080 });
   const datagrams = await peer.udp.open({ port: 8081 });
   void (async () => {
@@ -125,7 +154,7 @@ async function exercise(): Promise<void> {
   const gateway = { host: "127.0.0.1", port: address.port, serverName: "gateway.test" };
   await assert.rejects(Tunnel.connect(gateway, "student", "secret"));
   const tunnel = await Tunnel.connect(gateway, "student", "secret", { ca: pems.cert });
-  const socks = await SocksServer.listen(tunnel.stack, 0);
+  const socks = await SocksServer.listen(tunnel.stack, tunnel.dnsServer, 0);
   void tunnel.done.catch(() => {});
 
   const tcp = connect(socks.port, "127.0.0.1");
