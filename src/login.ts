@@ -3,9 +3,13 @@ import { homedir, tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 
 import { launch } from "puppeteer-core";
-import type { Page } from "puppeteer-core";
+import type { CDPSession, Page } from "puppeteer-core";
 
-import type { Credentials } from "./credentials.ts";
+import { AuthenticationError } from "./controller.ts";
+import type { Credentials, RememberedPassword } from "./credentials.ts";
+
+type LoginResult = Credentials & { rememberedPassword?: RememberedPassword };
+type PasswordInput = Pick<RememberedPassword, "origin" | "username" | "password">;
 
 export function loginTokens(
   url: string,
@@ -59,7 +63,11 @@ export async function browserPath(explicit?: string): Promise<string> {
   throw new Error("Chrome or Chromium was not found; set --browser to its executable");
 }
 
-export async function login(url: URL, executable?: string): Promise<Credentials> {
+export async function login(
+  url: URL,
+  executable?: string,
+  options: { remember?: boolean; password?: RememberedPassword } = {},
+): Promise<LoginResult> {
   const executablePath = await browserPath(executable);
   const profile = await mkdtemp(join(tmpdir(), "openenlink-login-"));
   try {
@@ -67,9 +75,10 @@ export async function login(url: URL, executable?: string): Promise<Credentials>
       args: ["--no-proxy-server"],
       defaultViewport: null,
       executablePath,
+      pipe: true,
       handleSIGINT: false,
       handleSIGTERM: false,
-      headless: false,
+      headless: Boolean(options.password),
       userDataDir: profile,
     });
     const stop = () => {
@@ -81,20 +90,53 @@ export async function login(url: URL, executable?: string): Promise<Credentials>
     process.once("SIGTERM", stop);
     try {
       const page = await browser.newPage();
-      return await captureAuthorization(page, url);
+      const captured = captureAuthorization(page, url, options.remember);
+      if (!options.password) return await captured;
+      const timeout = AbortSignal.timeout(30_000);
+      timeout.addEventListener("abort", stop, { once: true });
+      try {
+        const [result] = await Promise.all([captured, fillPassword(page, options.password)]);
+        return { ...result, expiresAt: options.password.expiresAt };
+      } catch (error) {
+        if (timeout.aborted)
+          throw new AuthenticationError(
+            "Automatic school sign-in timed out; run login --remember to complete verification",
+          );
+        throw error;
+      } finally {
+        timeout.removeEventListener("abort", stop);
+      }
     } finally {
       process.off("SIGINT", stop);
       process.off("SIGTERM", stop);
       await browser.close();
     }
   } finally {
-    await rm(profile, { force: true, recursive: true });
+    await rm(profile, { force: true, recursive: true, maxRetries: 3, retryDelay: 100 });
   }
 }
 
-export async function captureAuthorization(page: Page, url: URL): Promise<Credentials> {
+export async function fillPassword(page: Page, password: RememberedPassword): Promise<void> {
+  await page.waitForSelector("#password", { timeout: 15_000 });
+  if (new URL(page.url()).origin !== password.origin)
+    throw new AuthenticationError("School login moved to another origin; run login --remember");
+  await page.locator("#username").fill(password.username);
+  await page.locator("#password").fill(password.password);
+  await page.click("#login-submit");
+}
+
+export async function captureAuthorization(
+  page: Page,
+  url: URL,
+  remember = false,
+): Promise<LoginResult> {
   const session = await page.createCDPSession();
-  const credentials = Promise.withResolvers<Credentials>();
+  let password: PasswordInput | undefined;
+  if (remember)
+    await watchPassword(session, (value) => {
+      password = value;
+    });
+  const credentials = Promise.withResolvers<LoginResult>();
   const closed = () => credentials.reject(new Error("Login window closed"));
   page.once("close", closed);
 
@@ -129,7 +171,12 @@ export async function captureAuthorization(page: Page, url: URL): Promise<Creden
           responseCode: 200,
           responseHeaders: [{ name: "Content-Type", value: "text/plain; charset=utf-8" }],
         });
-        credentials.resolve({ ...tokens, expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 });
+        const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+        credentials.resolve({
+          ...tokens,
+          expiresAt,
+          ...(password ? { rememberedPassword: { ...password, expiresAt } } : {}),
+        });
         return;
       }
 
@@ -163,6 +210,70 @@ export async function captureAuthorization(page: Page, url: URL): Promise<Creden
     return await credentials.promise;
   } finally {
     page.off("close", closed);
-    await session.detach();
+    if (!session.detached) await session.detach();
   }
+}
+
+async function watchPassword(
+  session: CDPSession,
+  update: (password: PasswordInput) => void,
+): Promise<void> {
+  await session.send("Page.enable");
+  const mainFrame = (await session.send("Page.getFrameTree")).frameTree.frame.id;
+  const contexts = new Map<string, number>();
+  session.on("Runtime.executionContextCreated", ({ context }) => {
+    if (context.name === "openenlink-password" && context.auxData?.frameId === mainFrame)
+      contexts.set(context.uniqueId, context.id);
+  });
+  session.on("Runtime.executionContextDestroyed", ({ executionContextUniqueId }) =>
+    contexts.delete(executionContextUniqueId),
+  );
+  session.on("Runtime.executionContextsCleared", () => contexts.clear());
+  session.on("Runtime.bindingCalled", (event) => {
+    if (
+      event.name === "openenlinkPassword" &&
+      contexts.values().some((id) => id === event.executionContextId)
+    )
+      update(JSON.parse(event.payload) as PasswordInput);
+  });
+  await session.send("Runtime.enable");
+  await session.send("Runtime.addBinding", {
+    name: "openenlinkPassword",
+    executionContextName: "openenlink-password",
+  });
+  const script = () => {
+    if (window.top !== window) return;
+    const capture = () => {
+      const username = document.querySelector<HTMLInputElement>("#username");
+      const password = document.querySelector<HTMLInputElement>("#password");
+      if (location.protocol !== "https:" || !username?.value || !password?.value) return;
+      const binding = window as unknown as { openenlinkPassword: (input: string) => void };
+      binding.openenlinkPassword(
+        JSON.stringify({
+          origin: location.origin,
+          username: username.value,
+          password: password.value,
+        }),
+      );
+    };
+    document.addEventListener(
+      "input",
+      (event) => {
+        if (event.isTrusted) capture();
+      },
+      true,
+    );
+    document.addEventListener("click", capture, true);
+    document.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "Enter") capture();
+      },
+      true,
+    );
+  };
+  await session.send("Page.addScriptToEvaluateOnNewDocument", {
+    worldName: "openenlink-password",
+    source: "(" + script.toString() + ")()",
+  });
 }

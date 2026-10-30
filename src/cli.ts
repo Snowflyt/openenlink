@@ -7,7 +7,7 @@ import { Controller, serverOrigin } from "./controller.ts";
 import { CredentialStore } from "./credentials.ts";
 import { login } from "./login.ts";
 
-const HELP = `openenlink login --server https://vpn.example.edu [--browser path] [--port 1088]
+const HELP = `openenlink login --server https://vpn.example.edu [--browser path] [--port 1088] [--remember]
 openenlink serve
 openenlink status
 openenlink logout`;
@@ -19,6 +19,7 @@ async function main(): Promise<void> {
       browser: { type: "string" },
       help: { short: "h", type: "boolean" },
       port: { type: "string" },
+      remember: { type: "boolean" },
       server: { type: "string" },
     },
   });
@@ -41,10 +42,22 @@ async function main(): Promise<void> {
     try {
       const url = await controller.loginUrl();
       console.log("Sign in on the school page. Authorization will be kept for seven days.");
-      const credentials = await login(url, config.browser);
+      if (values.remember)
+        console.log(
+          "The school username and password will be kept in the OS credential store for seven days.",
+        );
+      const { rememberedPassword, ...credentials } = await login(url, config.browser, {
+        remember: values.remember,
+      });
       await store.save(credentials);
+      if (rememberedPassword) await store.savePassword(rememberedPassword);
+      else await store.clearPassword();
       await saveConfig(config);
       await controller.user(credentials.accessToken);
+      if (values.remember && !rememberedPassword)
+        console.log(
+          "Authorization saved; the school did not use a supported username/password form.",
+        );
       console.log("Authorization saved. Run openenlink serve to connect.");
     } finally {
       await controller.close();
@@ -59,6 +72,9 @@ async function main(): Promise<void> {
         `Authorization expires ${new Date(credentials.expiresAt).toLocaleString()}`
       : "Login required",
     );
+    const password = await store.loadPassword();
+    if (password)
+      console.log(`Remembered password expires ${new Date(password.expiresAt).toLocaleString()}`);
   } else {
     const controller = new AbortController();
     process.once("SIGINT", () => controller.abort());

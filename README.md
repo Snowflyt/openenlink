@@ -16,6 +16,8 @@ npm start -- serve
 
 Login opens an isolated Chrome window on the school's SSO page. Enter school credentials there. The client keeps authorization in the OS credential store for up to seven days and removes the temporary browser profile. Chrome or Chromium must be installed; `--browser` selects an executable. Close other clients using the same campus account before logging in.
 
+Use `login --remember` to save a CAS username and password in the OS credential store for seven days. When a campus session ends, the client signs in again through the school page in a background browser. The saved password is filled only on its original HTTPS origin. A failed sign-in waits five minutes before another attempt; verification challenges can be completed with `login --remember`. `logout` removes both the authorization and remembered password.
+
 The proxy listens on `127.0.0.1:1088`. Use `--port` during login to choose another port. It supports SOCKS5 CONNECT and UDP ASSOCIATE over IPv4. Destination DNS queries use the campus resolver inside the tunnel. Configure applications to resolve names through SOCKS, for example:
 
 ```sh
@@ -29,7 +31,7 @@ npm start -- status
 npm start -- logout
 ```
 
-`logout` removes this client's saved authorization. `Ctrl+C` stops the proxy. After a dropped tunnel, the client retries with a delay of up to 30 seconds. It renews expired access tokens when login supplied a refresh token; otherwise run `login` again. The school may expire authorization before the local seven-day limit.
+`logout` removes this client's saved authorization. `Ctrl+C` stops the proxy. After a dropped tunnel, the client retries with a delay of up to 30 seconds. It renews expired access tokens with a refresh token or remembered password. Run `login` when credentials expire or the school requests verification.
 
 Settings are saved in `~/.config/openenlink/config.json`, or `%APPDATA%\openenlink\config.json` on Windows. Authorization stays in the OS credential store. Linux needs Secret Service or the kernel keyring; kernel-keyring credentials last until reboot.
 

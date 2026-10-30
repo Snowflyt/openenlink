@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
 import { test } from "node:test";
 
 import { launch } from "puppeteer-core";
+import { generate } from "selfsigned";
 
-import { browserPath, captureAuthorization } from "../src/login.ts";
+import { serve } from "../src/client.ts";
+import { AuthenticationError, Controller, PolicyError } from "../src/controller.ts";
+import { CredentialStore } from "../src/credentials.ts";
+import type { Credentials, RememberedPassword } from "../src/credentials.ts";
+import { browserPath, captureAuthorization, fillPassword } from "../src/login.ts";
 
 await test(
   "Capture SSO callbacks before their scripts can launch an application",
@@ -63,6 +69,182 @@ await test(
       assert.equal(unexpected, 0);
     } finally {
       await browser.close();
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  },
+);
+
+await test(
+  "Remember CAS credentials across origins and refuse to fill them on another origin",
+  { timeout: 30_000 },
+  async () => {
+    const certificate = await generate([{ name: "commonName", value: "localhost" }], {
+      keySize: 2048,
+    });
+    let port = 0;
+    const server = createHttpsServer(
+      { key: certificate.private, cert: certificate.cert },
+      (request, response) => {
+        if (request.url === "/start") {
+          response.writeHead(302, { Location: `https://school.test:${port}/login` });
+          response.end();
+        } else if (request.url === "/submit") {
+          response.writeHead(302, {
+            Location:
+              `https://portal.test:${port}/complete?accessToken=` +
+              Buffer.from("remembered-access").toString("base64"),
+          });
+          response.end();
+        } else {
+          response.writeHead(200, { "Content-Type": "text/html" });
+          response.end(
+            '<form method="post" action="/submit"><input id="username" name="username"><input id="password" name="password" type="password"><input id="login-submit" type="submit"></form>',
+          );
+        }
+      },
+    );
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    assert(address && typeof address === "object");
+    port = address.port;
+    const url = new URL(`https://portal.test:${port}/start`);
+    const browser = await launch({
+      executablePath: await browserPath(),
+      headless: true,
+      acceptInsecureCerts: true,
+      args: [
+        "--no-proxy-server",
+        "--host-resolver-rules=MAP portal.test 127.0.0.1, MAP school.test 127.0.0.1",
+      ],
+    });
+    try {
+      const page = await browser.newPage();
+      const password: RememberedPassword = {
+        origin: `https://school.test:${port}`,
+        username: "student",
+        password: "test-password",
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+      };
+      const capture = captureAuthorization(page, url, true);
+      await page.waitForSelector("#password");
+      assert.equal(
+        await page.evaluate(
+          () => typeof (window as unknown as { openenlinkPassword?: unknown }).openenlinkPassword,
+        ),
+        "undefined",
+      );
+      await fillPassword(page, password);
+      const captured = await capture;
+      assert.equal(captured.accessToken, "remembered-access");
+      assert.equal(captured.rememberedPassword?.username, password.username);
+      assert.equal(captured.rememberedPassword.password, password.password);
+      assert.equal(captured.rememberedPassword.origin, password.origin);
+      assert.equal(captured.rememberedPassword.expiresAt, captured.expiresAt);
+      await page.close();
+
+      const foreign = await browser.newPage();
+      await foreign.goto(password.origin + "/login");
+      await assert.rejects(
+        fillPassword(foreign, { ...password, origin: "https://outside.example.test" }),
+        AuthenticationError,
+      );
+      assert.deepEqual(
+        await foreign.$$eval("#username, #password", (inputs) =>
+          inputs.map((input) => (input as HTMLInputElement).value),
+        ),
+        ["", ""],
+      );
+    } finally {
+      await browser.close();
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  },
+);
+
+await test(
+  "Reauthorize an expired session with remembered credentials and preserve the seven-day deadline",
+  { timeout: 25_000 },
+  async (t) => {
+    let submitted = 0;
+    const server = createServer((request, response) => {
+      if (request.url === "/submit") {
+        submitted++;
+        response.writeHead(302, {
+          Location: "/complete?accessToken=" + Buffer.from("renewed-access").toString("base64"),
+        });
+        response.end();
+      } else {
+        response.writeHead(200, { "Content-Type": "text/html" });
+        response.end(
+          '<form method="post" action="/submit"><input id="username"><input id="password" type="password"><input id="login-submit" type="submit"></form>',
+        );
+      }
+    });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    assert(address && typeof address === "object");
+    const url = new URL(`http://127.0.0.1:${address.port}/login`);
+    const deadline = Date.now() + 3 * 24 * 60 * 60 * 1000;
+    let remembered: RememberedPassword = {
+      origin: url.origin,
+      username: "student",
+      password: "test-password",
+      expiresAt: deadline,
+    };
+    const saved: Credentials[] = [];
+    let refreshToken: string | undefined;
+    t.mock.method(CredentialStore.prototype, "load", () =>
+      Promise.resolve({
+        accessToken: "expired",
+        expiresAt: deadline,
+        ...(refreshToken ? { refreshToken } : {}),
+      }),
+    );
+    t.mock.method(CredentialStore.prototype, "loadPassword", () => Promise.resolve(remembered));
+    t.mock.method(CredentialStore.prototype, "savePassword", (value: RememberedPassword) => {
+      remembered = value;
+      return Promise.resolve();
+    });
+    t.mock.method(CredentialStore.prototype, "save", (value: Credentials) => {
+      saved.push(value);
+      return Promise.resolve();
+    });
+    t.mock.method(Controller.prototype, "loginUrl", () => Promise.resolve(url));
+    t.mock.method(Controller.prototype, "refresh", () =>
+      Promise.reject(new AuthenticationError("Refresh expired")),
+    );
+    t.mock.method(Controller.prototype, "user", (token: string) => {
+      if (token === "expired") return Promise.reject(new AuthenticationError("Expired"));
+      return Promise.resolve("student");
+    });
+    t.mock.method(Controller.prototype, "rules", () => {
+      return Promise.reject(new PolicyError("Mock authorization complete"));
+    });
+    try {
+      await assert.rejects(
+        serve({ server: "https://vpn.example.test", port: 1088 }, new AbortController().signal),
+        /Mock authorization complete/,
+      );
+      assert.deepEqual(saved, [{ accessToken: "renewed-access", expiresAt: deadline }]);
+      assert.equal(submitted, 1);
+      await assert.rejects(
+        serve({ server: "https://vpn.example.test", port: 1088 }, new AbortController().signal),
+        /retry after five minutes/,
+      );
+      assert.equal(submitted, 1);
+      remembered = { ...remembered, lastAttemptAt: 0 };
+      refreshToken = "rejected-refresh";
+      await assert.rejects(
+        serve({ server: "https://vpn.example.test", port: 1088 }, new AbortController().signal),
+        /Mock authorization complete/,
+      );
+      assert.equal(submitted, 2);
+      assert.equal(saved[1].expiresAt, deadline);
+    } finally {
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }

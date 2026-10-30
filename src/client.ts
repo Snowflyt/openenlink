@@ -6,6 +6,7 @@ import type { Config } from "./config.ts";
 import { AuthenticationError, Controller, PolicyError, tunnelRules } from "./controller.ts";
 import { CredentialStore } from "./credentials.ts";
 import type { Credentials } from "./credentials.ts";
+import { login } from "./login.ts";
 import type { Gateway } from "./tunnel.ts";
 import type { TunnelOptions } from "./worker.ts";
 
@@ -20,7 +21,12 @@ export async function serve(config: Config, signal: AbortSignal): Promise<void> 
       const credentials = await store.load();
       if (!credentials) throw new AuthenticationError("Run login to authorize this client");
       try {
-        const { gateways, token, user } = await session(controller, credentials, store);
+        const { gateways, token, user } = await session(
+          controller,
+          credentials,
+          store,
+          config.browser,
+        );
         const gateway = gateways[gatewayIndex++ % gateways.length];
         const lifetime = AbortSignal.any([
           signal,
@@ -48,13 +54,32 @@ async function session(
   controller: Controller,
   credentials: Credentials,
   store: CredentialStore,
+  browser?: string,
 ): Promise<{ user: string; token: string; gateways: Gateway[] }> {
   try {
     const user = await controller.user(credentials.accessToken);
     return { ...tunnelRules(await controller.rules(credentials.accessToken)), user };
   } catch (error) {
-    if (!(error instanceof AuthenticationError) || !credentials.refreshToken) throw error;
-    const renewed = await controller.refresh(credentials.refreshToken);
+    if (!(error instanceof AuthenticationError)) throw error;
+    let renewed;
+    if (credentials.refreshToken) {
+      try {
+        renewed = await controller.refresh(credentials.refreshToken);
+      } catch (error) {
+        if (!(error instanceof AuthenticationError)) throw error;
+      }
+    }
+    if (!renewed) {
+      const password = await store.loadPassword();
+      if (!password) throw error;
+      if (Date.now() - (password.lastAttemptAt ?? 0) < 5 * 60 * 1000)
+        throw new AuthenticationError(
+          "Automatic sign-in will retry after five minutes; login --remember can continue now",
+        );
+      await store.savePassword({ ...password, lastAttemptAt: Date.now() });
+      console.log("Campus session ended; signing in on the school site");
+      renewed = await login(await controller.loginUrl(), browser, { password });
+    }
     const saved = { ...renewed, expiresAt: credentials.expiresAt };
     await store.save(saved);
     const user = await controller.user(saved.accessToken);
