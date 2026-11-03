@@ -12,7 +12,7 @@
   "scripts": {
     "commitlint": "commitlint --edit",
     "format": "prettier --write \"**/*.{ts,js,cjs,json,md}\"",
-    "postinstall": "node -e \"import { execFileSync } from 'node:child_process'; import fs from 'node:fs'; const directory = 'node_modules/tcpip'; const metadata = JSON.parse(fs.readFileSync(directory + '/package.json', 'utf8')); if (metadata.version !== '0.4.0') throw new Error('Review the tcpip half-close fix for this version'); const file = directory + '/dist/index.js'; const source = fs.readFileSync(file, 'utf8'); const quote = String.fromCharCode(34); const broken = 'this.#o(),this.#r?.error(new Error(' + quote + 'tcp connection closed' + quote + '))'; fs.writeFileSync(file, source.replaceAll(broken, 'this.#o()')); if (fs.existsSync('.git')) execFileSync('git', ['config', 'core.hooksPath', '.githooks']);\"",
+    "postinstall": "node patches/tcpip/apply.js && node -e \"import { execFileSync } from 'node:child_process'; import fs from 'node:fs'; if (fs.existsSync('.git')) execFileSync('git', ['config', 'core.hooksPath', '.githooks']);\"",
     "lint": "eslint \"{src,test}/**/*.ts\" \"*.{js,cjs}\" --max-warnings 0",
     "lint:fix": "eslint \"{src,test}/**/*.ts\" \"*.{js,cjs}\" --fix --max-warnings 0",
     "start": "node src/cli.ts",

@@ -1,0 +1,96 @@
+diff --git a/wasm/include/lwipopts.h b/wasm/include/lwipopts.h
+index f756c7f..feb2d01 100644
+--- a/wasm/include/lwipopts.h
++++ b/wasm/include/lwipopts.h
+@@ -18,7 +18,7 @@
+ 
+ // Memory options
+ #define MEM_LIBC_MALLOC 1                        // Use malloc/free from the C library (vs. custom memory pools)
+-#define PBUF_POOL_SIZE 16                        // Number of packet buffers in the pool
++#define PBUF_POOL_SIZE (TCP_WND / TCP_MSS + 16)  // Number of packet buffers in the pool (must cover TCP_WND)
+ #define PBUF_POOL_BUFSIZE TYPICAL_PACKET_SIZE    // Size of each pbuf in the pool (in bytes)
+ #define MEMP_NUM_TCP_SEG (2 * TCP_SND_QUEUELEN)  // Number of TCP segments in the pool
+ #define MEMP_NUM_PBUF (2 * MEMP_NUM_TCP_SEG)     // Number of pbufs in the pool
+@@ -49,8 +49,12 @@
+ #define LWIP_TCP 1                                    // Enable TCP functionality
+ #define LWIP_TCP_TIMESTAMPS 1                         // Enable TCP timestamps (needed by Linux)
+ #define TCP_MSS 1460                                  // Maximum segment size
+-#define TCP_WND (4 * TCP_MSS)                         // TCP window size
+-#define TCP_SND_BUF (4 * TCP_MSS)                     // TCP send buffer size
++#define LWIP_WND_SCALE 1                              // Allow windows beyond 64 KiB
++#define TCP_RCV_SCALE 2                               // Receive window scale shift
++#define TCP_WND (128 * TCP_MSS)                       // TCP window size
++#define TCP_SND_BUF (128 * TCP_MSS)                   // TCP send buffer size
++#define TCP_SNDLOWAT (16 * TCP_MSS)                   // Keep below the u16_t limit lwIP checks
++#define LWIP_TCP_RTO_TIME 1000                        // Initial retransmission timeout (ms)
+ #define TCP_SND_QUEUELEN (2 * TCP_SND_BUF / TCP_MSS)  // TCP send queue length
+ #define MEMP_NUM_TCP_PCB 256                          // Number of simultaneously active TCP PCBs
+ #define MEMP_NUM_TCP_PCB_LISTEN 256                   // Number of simultaneously active listening TCP PCBs
+diff --git a/wasm/tcp.c b/wasm/tcp.c
+index cd80c1b..d9a995d 100644
+--- a/wasm/tcp.c
++++ b/wasm/tcp.c
+@@ -18,7 +18,9 @@ void update_tcp_receive_buffer(struct tcp_pcb *conn, uint16_t length) {
+ 
+ EXPORT("send_tcp_chunk")
+ uint16_t send_tcp_chunk(struct tcp_pcb *conn, uint8_t *chunk, uint16_t length) {
+-  uint16_t available_space = tcp_sndbuf(conn);
++  // tcp_sndbuf is 32-bit with window scaling but tcp_write takes a u16_t
++  tcpwnd_size_t send_buffer = tcp_sndbuf(conn);
++  uint16_t available_space = send_buffer > 0xFFFF ? 0xFFFF : (uint16_t)send_buffer;
+ 
+   if (available_space == 0) {
+     return 0;
+@@ -58,7 +60,10 @@ err_t recv_tcp_callback(void *arg, struct tcp_pcb *conn, struct pbuf *p, err_t e
+     return ERR_OK;
+   }
+ 
+-  receive_tcp_chunk(conn, p->payload, p->len);
++  // Data that arrived out of order is delivered as a pbuf chain
++  for (struct pbuf *q = p; q != NULL; q = q->next) {
++    receive_tcp_chunk(conn, q->payload, q->len);
++  }
+   pbuf_free(p);
+ 
+   return ERR_OK;
+diff --git a/wasm/tun_interface.c b/wasm/tun_interface.c
+index 93704e7..69ebc77 100644
+--- a/wasm/tun_interface.c
++++ b/wasm/tun_interface.c
+@@ -8,8 +8,20 @@ extern void register_tun_interface(struct netif *netif);
+ extern void receive_packet(struct netif *netif, const uint8_t *packet, uint16_t length);
+ 
+ err_t tun_interface_output(struct netif *netif, struct pbuf *p, const ip4_addr_t *ipaddr) {
+-  receive_packet(netif, (uint8_t *)p->payload, p->tot_len);
+-  return 0;
++  // lwIP may hand over a pbuf chain; the host expects one contiguous packet
++  if (p->next == NULL) {
++    receive_packet(netif, (uint8_t *)p->payload, p->tot_len);
++    return ERR_OK;
++  }
++
++  uint8_t *packet = (uint8_t *)malloc(p->tot_len);
++  if (packet == NULL) {
++    return ERR_MEM;
++  }
++  pbuf_copy_partial(p, packet, p->tot_len, 0);
++  receive_packet(netif, packet, p->tot_len);
++  free(packet);
++  return ERR_OK;
+ }
+ 
+ static err_t tun_interface_init(struct netif *netif) {
+@@ -57,10 +69,10 @@ void remove_tun_interface(struct netif *netif) {
+ 
+ EXPORT("send_tun_interface")
+ void send_tun_interface(struct netif *netif, const uint8_t *packet, uint16_t length) {
+-  // Allocate a pbuf with PBUF_REF, pointing to packet buffer data
+-  struct pbuf *p = pbuf_alloc(PBUF_RAW, length, PBUF_REF);
++  // Copy the packet so lwIP owns it (queued segments outlive this call)
++  struct pbuf *p = pbuf_alloc(PBUF_RAW, length, PBUF_RAM);
+   if (p != NULL) {
+-    p->payload = (void *)packet;
++    pbuf_take(p, packet, length);
+ 
+     // Pass the pbuf to lwIP for processing
+     if (netif->input(p, netif) != ERR_OK) {
