@@ -27,6 +27,13 @@ curl --proxy http://127.0.0.1:1088 https://its.suda.edu.cn/
 
 Tools that read `http_proxy` and `https_proxy`, such as git and pip, can use `http://127.0.0.1:1088`.
 
+`nc host port` joins standard input and output to a campus host through the running proxy, which suits SSH on any system, including Windows. It takes `--port` when `serve` uses another port and works with a proxy started without `--proxy-user`. In `~/.ssh/config`:
+
+```
+Host *.suda.edu.cn
+  ProxyCommand node /path/to/openenlink/src/cli.ts nc %h %p
+```
+
 On a shared machine, other accounts can reach the same local port. `serve --proxy-user name` reads a password from the terminal, or one line from standard input, and makes the proxy require it through SOCKS5 username/password or HTTP Basic proxy authentication. Clients then connect with `socks5h://name:password@127.0.0.1:1088` or `http://name:password@127.0.0.1:1088`.
 
 Controller requests carry Node.js's default User-Agent. `login --user-agent text` replaces it for gateways that filter clients, and `--user-agent ""` restores the default.
@@ -50,7 +57,7 @@ npm run typecheck
 npm run lint
 ```
 
-Tests cover a local TLS gateway, certificate rejection, SOCKS TCP/UDP, HTTP CONNECT and request forwarding, compressed and loopback DNS replies, connection half-close, TCP under packet loss and reordering, controller signing and SSO callback interception in Chromium. Browser tests require Chrome or Chromium. Each tunnel runs in a worker so disconnecting releases its WASM memory and timers.
+Tests cover a local TLS gateway, certificate rejection, SOCKS TCP/UDP, HTTP CONNECT and request forwarding, `nc`, compressed and loopback DNS replies, connection half-close, TCP under packet loss and reordering, controller signing and SSO callback interception in Chromium. Browser tests require Chrome or Chromium. Each tunnel runs in a worker so disconnecting releases its WASM memory and timers.
 
 The install step patches `tcpip` 0.4.0 from `patches/tcpip`. The JavaScript fixes keep the write side open after a peer FIN and free packet buffers copied into WASM memory. The rebuilt WASM delivers every pbuf of out-of-order data, sends chained outgoing packets whole and copies incoming packets before lwIP queues them. Without these, one lost packet could stall or corrupt a connection. It also uses a 182 KiB window with window scaling instead of 5.6 KiB, and a 1 s initial retransmission timeout instead of 3 s. `patches/tcpip/build.sh` rebuilds `tcpip.wasm` from `lwip-glue.patch` with wasi-sdk 24. That dependency is pinned until the fixes are available upstream.
 

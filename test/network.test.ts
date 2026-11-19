@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { createSocket } from "node:dgram";
 import { once } from "node:events";
 import { connect } from "node:net";
 import type { Socket } from "node:net";
 import { test } from "node:test";
 import { createServer } from "node:tls";
+import { fileURLToPath } from "node:url";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 
 import { DnsServer } from "@tcpip/dns";
@@ -259,6 +261,19 @@ async function exercise(): Promise<void> {
   );
   forwarded.end();
   assert.equal(await forwardedReader.chunk(), undefined);
+
+  if (!auth) {
+    const cli = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
+    const child = spawn(
+      process.execPath,
+      [cli, "nc", "campus.test", "8080", "--port", String(proxy.port)],
+      { stdio: ["pipe", "pipe", "inherit"] },
+    );
+    const exited = once(child, "exit");
+    child.stdin.end(payload);
+    assert.deepEqual(Buffer.concat(await child.stdout.toArray()), payload);
+    assert.deepEqual(await exited, [0, null]);
+  }
 
   const control = connect(proxy.port, "127.0.0.1");
   const udpReader = new ByteReader(control);

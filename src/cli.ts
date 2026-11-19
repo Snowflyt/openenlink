@@ -6,11 +6,13 @@ import { loadConfig, portNumber, saveConfig } from "./config.ts";
 import { AuthenticationError, Controller, serverOrigin } from "./controller.ts";
 import { CredentialStore } from "./credentials.ts";
 import { login } from "./login.ts";
+import { nc } from "./nc.ts";
 import { askSecret } from "./prompt.ts";
 
 const USAGE = `Usage:
   openenlink login [https://vpn.example.edu] [--remember] [--browser path] [--user-agent text]
   openenlink serve [--port 1088] [--proxy-user name]
+  openenlink nc host port [--port 1088]
   openenlink status
   openenlink logout`;
 
@@ -90,6 +92,18 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "nc") {
+    const { positionals, values } = parseArgs({
+      allowPositionals: true,
+      args,
+      options: { port: { type: "string" } },
+    });
+    const [host, port, ...rest] = positionals;
+    if (!host || !port || rest.length) throw new UsageError("nc needs a host and a port");
+    if (Buffer.byteLength(host) > 255) throw new UsageError("Host names must be at most 255 bytes");
+    await nc(host, portNumber(port), portNumber(values.port ?? 1088));
+    return;
+  }
   if (command !== "status" && command !== "logout")
     throw new UsageError(`Unknown command ${command}`);
   parseArgs({ args, options: {} });
