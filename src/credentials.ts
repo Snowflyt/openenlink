@@ -2,12 +2,11 @@ import { AsyncEntry } from "@napi-rs/keyring";
 
 import { object, text } from "./controller.ts";
 
-export type Credentials = { accessToken: string; refreshToken?: string; expiresAt: number };
+export type Credentials = { accessToken: string; refreshToken?: string };
 export type RememberedPassword = {
   origin: string;
   username: string;
   password: string;
-  expiresAt: number;
   lastAttemptAt?: number;
 };
 
@@ -29,15 +28,8 @@ export class CredentialStore {
     } catch {
       throw new Error("Saved authorization is damaged; run login again");
     }
-    if (typeof value.expiresAt !== "number") throw new Error("Saved authorization has no expiry");
-    if (value.expiresAt <= Date.now()) {
-      await this.clear();
-      return;
-    }
-
     return {
       accessToken: text(value.accessToken, "saved access token"),
-      expiresAt: value.expiresAt,
       ...(typeof value.refreshToken === "string" ? { refreshToken: value.refreshToken } : {}),
     };
   }
@@ -55,11 +47,6 @@ export class CredentialStore {
     const saved = await this.passwordEntry.getPassword();
     if (saved === null) return;
     const value = object(JSON.parse(saved));
-    if (typeof value.expiresAt !== "number") throw new Error("Saved password has no expiry");
-    if (value.expiresAt <= Date.now()) {
-      await this.clearPassword();
-      return;
-    }
     const origin = new URL(text(value.origin, "password origin"));
     if (origin.protocol !== "https:" || origin.origin !== value.origin)
       throw new Error("Saved password origin must be an HTTPS origin");
@@ -67,7 +54,6 @@ export class CredentialStore {
       origin: origin.origin,
       username: text(value.username, "saved username"),
       password: text(value.password, "saved password"),
-      expiresAt: value.expiresAt,
       ...(typeof value.lastAttemptAt === "number" ? { lastAttemptAt: value.lastAttemptAt } : {}),
     };
   }

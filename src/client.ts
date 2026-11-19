@@ -28,11 +28,7 @@ export async function serve(config: Config, signal: AbortSignal): Promise<void> 
           config.browser,
         );
         const gateway = gateways[gatewayIndex++ % gateways.length];
-        const lifetime = AbortSignal.any([
-          signal,
-          AbortSignal.timeout(Math.max(0, credentials.expiresAt - Date.now())),
-        ]);
-        await runWorker({ gateway, port: config.port, token, user }, lifetime, () => {
+        await runWorker({ gateway, port: config.port, token, user }, signal, () => {
           retry = 1000;
         });
       } catch (error) {
@@ -80,10 +76,9 @@ async function session(
       console.log("Campus session ended; signing in on the school site");
       renewed = await login(await controller.loginUrl(), browser, { password });
     }
-    const saved = { ...renewed, expiresAt: credentials.expiresAt };
-    await store.save(saved);
-    const user = await controller.user(saved.accessToken);
-    return { ...tunnelRules(await controller.rules(saved.accessToken)), user };
+    await store.save(renewed);
+    const user = await controller.user(renewed.accessToken);
+    return { ...tunnelRules(await controller.rules(renewed.accessToken)), user };
   }
 }
 

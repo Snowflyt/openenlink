@@ -50,16 +50,12 @@ await test(
     try {
       for (const path of ["/query", "/cookie"]) {
         const page = await browser.newPage();
-        const startedAt = Date.now();
         const credentials = await captureAuthorization(
           page,
           new URL(`http://127.0.0.1:${address.port}${path}`),
         );
         assert.equal(credentials.accessToken, "test-access-token");
         assert.equal(credentials.refreshToken, path === "/query" ? "test-refresh" : undefined);
-        const retention = 7 * 24 * 60 * 60 * 1000;
-        assert.ok(credentials.expiresAt >= startedAt + retention);
-        assert.ok(credentials.expiresAt <= Date.now() + retention);
         await page.waitForFunction(() =>
           document.body.textContent.includes("Authorization received"),
         );
@@ -125,7 +121,6 @@ await test(
         origin: `https://school.test:${port}`,
         username: "student",
         password: "test-password",
-        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       };
       const capture = captureAuthorization(page, url, true);
       await page.waitForSelector("#password");
@@ -141,7 +136,6 @@ await test(
       assert.equal(captured.rememberedPassword?.username, password.username);
       assert.equal(captured.rememberedPassword.password, password.password);
       assert.equal(captured.rememberedPassword.origin, password.origin);
-      assert.equal(captured.rememberedPassword.expiresAt, captured.expiresAt);
       await page.close();
 
       const foreign = await browser.newPage();
@@ -165,7 +159,7 @@ await test(
 );
 
 await test(
-  "Reauthorize an expired session with remembered credentials and preserve the seven-day deadline",
+  "Reauthorize an expired session with remembered credentials",
   { timeout: 25_000 },
   async (t) => {
     let submitted = 0;
@@ -188,19 +182,16 @@ await test(
     const address = server.address();
     assert(address && typeof address === "object");
     const url = new URL(`http://127.0.0.1:${address.port}/login`);
-    const deadline = Date.now() + 3 * 24 * 60 * 60 * 1000;
     let remembered: RememberedPassword = {
       origin: url.origin,
       username: "student",
       password: "test-password",
-      expiresAt: deadline,
     };
     const saved: Credentials[] = [];
     let refreshToken: string | undefined;
     t.mock.method(CredentialStore.prototype, "load", () =>
       Promise.resolve({
         accessToken: "expired",
-        expiresAt: deadline,
         ...(refreshToken ? { refreshToken } : {}),
       }),
     );
@@ -229,7 +220,7 @@ await test(
         serve({ server: "https://vpn.example.test", port: 1088 }, new AbortController().signal),
         /Mock authorization complete/,
       );
-      assert.deepEqual(saved, [{ accessToken: "renewed-access", expiresAt: deadline }]);
+      assert.deepEqual(saved, [{ accessToken: "renewed-access" }]);
       assert.equal(submitted, 1);
       await assert.rejects(
         serve({ server: "https://vpn.example.test", port: 1088 }, new AbortController().signal),
@@ -243,7 +234,7 @@ await test(
         /Mock authorization complete/,
       );
       assert.equal(submitted, 2);
-      assert.equal(saved[1].expiresAt, deadline);
+      assert.deepEqual(saved[1], { accessToken: "renewed-access" });
     } finally {
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));

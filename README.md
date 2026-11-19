@@ -14,9 +14,9 @@ npm start -- login --server https://wvpn.suda.edu.cn
 npm start -- serve
 ```
 
-Login opens an isolated Chrome window on the school's SSO page. Enter school credentials there. The client keeps authorization in the OS credential store for up to seven days and removes the temporary browser profile. Chrome or Chromium must be installed; `--browser` selects an executable. Close other clients using the same campus account before logging in.
+Login opens an isolated Chrome window on the school's SSO page. Enter school credentials there. The client keeps authorization in the OS credential store until `logout` and removes the temporary browser profile. Chrome or Chromium must be installed; `--browser` selects an executable. Close other clients using the same campus account before logging in.
 
-Use `login --remember` to save a CAS username and password in the OS credential store for seven days. When a campus session ends, the client signs in again through the school page in a background browser. The saved password is filled only on its original HTTPS origin. A failed sign-in waits five minutes before another attempt; verification challenges can be completed with `login --remember`. `logout` removes both the authorization and remembered password.
+Use `login --remember` to save a CAS username and password in the OS credential store. When a campus session ends, the client signs in again through the school page in a background browser. The saved password is filled only on its original HTTPS origin. A failed sign-in waits five minutes before another attempt; verification challenges can be completed with `login --remember`. `logout` removes both the authorization and remembered password.
 
 The proxy listens on `127.0.0.1:1088`. Use `--port` during login to choose another port. It supports SOCKS5 CONNECT and UDP ASSOCIATE over IPv4. Destination DNS queries use the campus resolver inside the tunnel. Configure applications to resolve names through SOCKS, for example:
 

@@ -41,11 +41,9 @@ async function main(): Promise<void> {
     const controller = new Controller(config.server);
     try {
       const url = await controller.loginUrl();
-      console.log("Sign in on the school page. Authorization will be kept for seven days.");
+      console.log("Sign in on the school page.");
       if (values.remember)
-        console.log(
-          "The school username and password will be kept in the OS credential store for seven days.",
-        );
+        console.log("The school username and password will be kept in the OS credential store.");
       const { rememberedPassword, ...credentials } = await login(url, config.browser, {
         remember: values.remember,
       });
@@ -66,15 +64,9 @@ async function main(): Promise<void> {
     await store.clear();
     console.log("Saved authorization removed.");
   } else if (command === "status") {
-    const credentials = await store.load();
-    console.log(
-      credentials ?
-        `Authorization expires ${new Date(credentials.expiresAt).toLocaleString()}`
-      : "Login required",
-    );
+    console.log((await store.load()) ? "Authorization saved" : "Login required");
     const password = await store.loadPassword();
-    if (password)
-      console.log(`Remembered password expires ${new Date(password.expiresAt).toLocaleString()}`);
+    if (password) console.log(`Password remembered for ${password.username}`);
   } else {
     const controller = new AbortController();
     process.once("SIGINT", () => controller.abort());

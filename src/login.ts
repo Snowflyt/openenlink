@@ -11,11 +11,7 @@ import type { Credentials, RememberedPassword } from "./credentials.ts";
 type LoginResult = Credentials & { rememberedPassword?: RememberedPassword };
 type PasswordInput = Pick<RememberedPassword, "origin" | "username" | "password">;
 
-export function loginTokens(
-  url: string,
-  origin: string,
-  cookie?: string,
-): Omit<Credentials, "expiresAt"> | undefined {
+export function loginTokens(url: string, origin: string, cookie?: string): Credentials | undefined {
   const location = new URL(url);
   if (location.origin !== origin) return;
   const fragment = location.hash.slice(1);
@@ -96,7 +92,7 @@ export async function login(
       timeout.addEventListener("abort", stop, { once: true });
       try {
         const [result] = await Promise.all([captured, fillPassword(page, options.password)]);
-        return { ...result, expiresAt: options.password.expiresAt };
+        return result;
       } catch (error) {
         if (timeout.aborted)
           throw new AuthenticationError(
@@ -171,12 +167,7 @@ export async function captureAuthorization(
           responseCode: 200,
           responseHeaders: [{ name: "Content-Type", value: "text/plain; charset=utf-8" }],
         });
-        const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
-        credentials.resolve({
-          ...tokens,
-          expiresAt,
-          ...(password ? { rememberedPassword: { ...password, expiresAt } } : {}),
-        });
+        credentials.resolve({ ...tokens, ...(password ? { rememberedPassword: password } : {}) });
         return;
       }
 
