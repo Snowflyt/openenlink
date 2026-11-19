@@ -2,15 +2,15 @@
 import { parseArgs } from "node:util";
 
 import { serve } from "./client.ts";
-import { loadConfig, portNumber, saveConfig } from "./config.ts";
+import { credentialStore, loadConfig, portNumber, saveConfig } from "./config.ts";
 import { AuthenticationError, Controller, serverOrigin } from "./controller.ts";
-import { CredentialStore } from "./credentials.ts";
 import { login } from "./login.ts";
 import { nc } from "./nc.ts";
 import { askSecret } from "./prompt.ts";
 
 const USAGE = `Usage:
-  openenlink login [https://vpn.example.edu] [--remember] [--browser path] [--user-agent text]
+  openenlink login [https://vpn.example.edu] [--remember] [--insecure-storage]
+                   [--browser path] [--user-agent text]
   openenlink serve [--port 1088] [--proxy-user name]
   openenlink nc host port [--port 1088]
   openenlink status
@@ -28,6 +28,7 @@ async function main(): Promise<void> {
       args,
       options: {
         browser: { type: "string" },
+        "insecure-storage": { type: "boolean" },
         remember: { type: "boolean" },
         "user-agent": { type: "string" },
       },
@@ -40,14 +41,16 @@ async function main(): Promise<void> {
       browser: values.browser ?? previous?.browser,
       server: serverOrigin(server),
       userAgent: (values["user-agent"] ?? previous?.userAgent) || undefined,
+      insecureStorage: values["insecure-storage"] || undefined,
     };
-    const store = new CredentialStore(config.server);
+    const store = credentialStore(config);
+    const where = store.file ?? "the OS credential store";
     const controller = new Controller(config.server, { userAgent: config.userAgent });
     try {
       const url = await controller.loginUrl();
       console.log("Sign in on the school page.");
       if (values.remember)
-        console.log("The school username and password will be kept in the OS credential store.");
+        console.log(`The school username and password will be kept in ${where}.`);
       const { rememberedPassword, ...credentials } = await login(url, config.browser, {
         remember: values.remember,
       });
@@ -55,12 +58,14 @@ async function main(): Promise<void> {
       if (rememberedPassword) await store.savePassword(rememberedPassword);
       else await store.clearPassword();
       await saveConfig(config);
+      if (previous && Boolean(previous.insecureStorage) !== Boolean(config.insecureStorage))
+        await credentialStore(previous).clear();
       await controller.user(credentials.accessToken);
       if (values.remember && !rememberedPassword)
         console.log(
           "Authorization saved; the school did not use a supported username/password form.",
         );
-      console.log("Authorization saved. Run openenlink serve to connect.");
+      console.log(`Authorization saved in ${where}. Run openenlink serve to connect.`);
     } finally {
       await controller.close();
     }
@@ -108,7 +113,7 @@ async function main(): Promise<void> {
     throw new UsageError(`Unknown command ${command}`);
   parseArgs({ args, options: {} });
   const config = await loadConfig();
-  const store = config && new CredentialStore(config.server);
+  const store = config && credentialStore(config);
   if (command === "logout") {
     await store?.clear();
     console.log("Saved authorization removed.");

@@ -3,10 +3,10 @@ import { getAsset, isSea } from "node:sea";
 import { setTimeout } from "node:timers/promises";
 import { Worker } from "node:worker_threads";
 
+import { credentialStore } from "./config.ts";
 import type { Config } from "./config.ts";
 import { AuthenticationError, Controller, PolicyError, tunnelRules } from "./controller.ts";
-import { CredentialStore } from "./credentials.ts";
-import type { Credentials } from "./credentials.ts";
+import type { CredentialStore, Credentials } from "./credentials.ts";
 import { login } from "./login.ts";
 import type { ProxyAuth } from "./proxy.ts";
 import type { Gateway } from "./tunnel.ts";
@@ -17,7 +17,7 @@ export async function serve(
   listener: { port: number; auth?: ProxyAuth },
   signal: AbortSignal,
 ): Promise<void> {
-  const store = new CredentialStore(config.server);
+  const store = credentialStore(config);
   const controller = new Controller(config.server, { userAgent: config.userAgent });
   let retry = 1000;
   let gatewayIndex = 0;

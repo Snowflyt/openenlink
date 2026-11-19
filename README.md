@@ -55,6 +55,8 @@ npm start -- logout
 
 Settings are saved in `$XDG_CONFIG_HOME/openenlink/config.json` (`~/.config/openenlink/config.json` when it is unset), or `%APPDATA%\openenlink\config.json` on Windows. Authorization stays in the OS credential store. Linux needs Secret Service or the kernel keyring; kernel-keyring credentials last until reboot.
 
+Hosts without a credential store, including Docker containers (the default seccomp profile blocks the kernel keyring), can use `login --insecure-storage`. It keeps the authorization and any remembered password as plain JSON in `credentials.json` next to `config.json`, readable only by its owner. Each `login` chooses again: a later `login` without the flag returns to the OS credential store and removes the copy in the file.
+
 ## Development
 
 ```sh
