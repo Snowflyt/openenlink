@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 
 import { serve } from "./client.ts";
 import { loadConfig, portNumber, saveConfig } from "./config.ts";
-import { Controller, serverOrigin } from "./controller.ts";
+import { AuthenticationError, Controller, serverOrigin } from "./controller.ts";
 import { CredentialStore } from "./credentials.ts";
 import { login } from "./login.ts";
 import { askSecret } from "./prompt.ts";
@@ -72,7 +72,7 @@ async function main(): Promise<void> {
     });
     const port = portNumber(values.port ?? 1088);
     const config = await loadConfig();
-    if (!config) throw new Error("Run openenlink login first");
+    if (!config) throw new AuthenticationError("Run openenlink login first");
     const username = values["socks-user"];
     const socks =
       username === undefined ? undefined : (
@@ -100,7 +100,9 @@ async function main(): Promise<void> {
     console.log("Saved authorization removed.");
     return;
   }
-  console.log((await store?.load()) ? "Authorization saved" : "Login required");
+  const saved = await store?.load();
+  console.log(saved ? "Authorization saved" : "Login required");
+  if (!saved) process.exitCode = 3;
   const password = await store?.loadPassword();
   if (password) console.log(`Password remembered for ${password.username}`);
 }
@@ -111,5 +113,8 @@ await main().catch((error: unknown) => {
     String((error as { code?: unknown }).code).startsWith("ERR_PARSE_ARGS");
   console.error(error instanceof Error ? error.message : "openenlink failed");
   if (usage) console.error(USAGE);
-  process.exitCode = usage ? 2 : 1;
+  process.exitCode =
+    usage ? 2
+    : error instanceof AuthenticationError ? 3
+    : 1;
 });
