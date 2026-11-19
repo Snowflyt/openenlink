@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createSocket } from "node:dgram";
 import { once } from "node:events";
 import { connect } from "node:net";
+import type { Socket } from "node:net";
 import { test } from "node:test";
 import { createServer } from "node:tls";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
@@ -13,6 +14,7 @@ import { createStack } from "tcpip";
 
 import { ByteReader, write } from "../src/protocol.ts";
 import { SocksServer } from "../src/socks.ts";
+import type { SocksAuth } from "../src/socks.ts";
 import { Tunnel } from "../src/tunnel.ts";
 
 if (isMainThread) {
@@ -20,6 +22,7 @@ if (isMainThread) {
     { dns: "10.88.0.1", compressed: false },
     { dns: "127.0.0.1", compressed: false },
     { dns: "10.88.0.1", compressed: true },
+    { dns: "10.88.0.1", compressed: false, socks: { username: "student", password: "proxy" } },
   ];
   for (const scenario of cases)
     await test(
@@ -41,9 +44,14 @@ if (isMainThread) {
 }
 
 async function exercise(): Promise<void> {
-  const { compressed, dns: peerAddress } = workerData as {
+  const {
+    compressed,
+    dns: peerAddress,
+    socks: auth,
+  } = workerData as {
     compressed: boolean;
     dns: `${number}.${number}.${number}.${number}`;
+    socks?: SocksAuth;
   };
   const pems = await generate([{ name: "commonName", value: "gateway.test" }], {
     extensions: [
@@ -154,13 +162,50 @@ async function exercise(): Promise<void> {
   const gateway = { host: "127.0.0.1", port: address.port, serverName: "gateway.test" };
   await assert.rejects(Tunnel.connect(gateway, "student", "secret"));
   const tunnel = await Tunnel.connect(gateway, "student", "secret", { ca: pems.cert });
-  const socks = await SocksServer.listen(tunnel.stack, tunnel.dnsServer, 0);
+  const socks = await SocksServer.listen(tunnel.stack, tunnel.dnsServer, 0, auth);
   void tunnel.done.catch(() => {});
+
+  const credentials = (password: string) => {
+    const username = Buffer.from(auth!.username);
+    return Buffer.concat([
+      Buffer.from([1, username.length]),
+      username,
+      Buffer.from([Buffer.byteLength(password)]),
+      Buffer.from(password),
+    ]);
+  };
+  const handshake = async (socket: Socket, reader: ByteReader) => {
+    if (!auth) {
+      await write(socket, Buffer.from([5, 1, 0]));
+      assert.deepEqual(await reader.read(2), Buffer.from([5, 0]));
+      return;
+    }
+    await write(socket, Buffer.from([5, 1, 2]));
+    assert.deepEqual(await reader.read(2), Buffer.from([5, 2]));
+    await write(socket, credentials(auth.password));
+    assert.deepEqual(await reader.read(2), Buffer.from([1, 0]));
+  };
+
+  if (auth) {
+    const anonymous = connect(socks.port, "127.0.0.1");
+    const anonymousReader = new ByteReader(anonymous);
+    await write(anonymous, Buffer.from([5, 1, 0]));
+    assert.deepEqual(await anonymousReader.read(2), Buffer.from([5, 255]));
+    anonymous.destroy();
+
+    const guess = connect(socks.port, "127.0.0.1");
+    const guessReader = new ByteReader(guess);
+    await write(guess, Buffer.from([5, 1, 2]));
+    assert.deepEqual(await guessReader.read(2), Buffer.from([5, 2]));
+    await write(guess, credentials("wrong"));
+    assert.deepEqual(await guessReader.read(2), Buffer.from([1, 1]));
+    assert.equal(await guessReader.chunk(), undefined);
+    guess.destroy();
+  }
 
   const tcp = connect(socks.port, "127.0.0.1");
   const reader = new ByteReader(tcp);
-  await write(tcp, Buffer.from([5, 1, 0]));
-  assert.deepEqual(await reader.read(2), Buffer.from([5, 0]));
+  await handshake(tcp, reader);
   const host = Buffer.from("campus.test");
   await write(
     tcp,
@@ -175,8 +220,7 @@ async function exercise(): Promise<void> {
 
   const control = connect(socks.port, "127.0.0.1");
   const udpReader = new ByteReader(control);
-  await write(control, Buffer.from([5, 1, 0]));
-  await udpReader.read(2);
+  await handshake(control, udpReader);
   await write(control, Buffer.from([5, 3, 0, 1, 0, 0, 0, 0, 0, 0]));
   const udpReply = await udpReader.read(10);
   assert.equal(udpReply[1], 0);

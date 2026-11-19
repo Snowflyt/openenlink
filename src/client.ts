@@ -28,9 +28,13 @@ export async function serve(config: Config, signal: AbortSignal): Promise<void> 
           config.browser,
         );
         const gateway = gateways[gatewayIndex++ % gateways.length];
-        await runWorker({ gateway, port: config.port, token, user }, signal, () => {
-          retry = 1000;
-        });
+        await runWorker(
+          { gateway, port: config.port, socks: config.socks, token, user },
+          signal,
+          () => {
+            retry = 1000;
+          },
+        );
       } catch (error) {
         signal.throwIfAborted();
         if (error instanceof AuthenticationError || error instanceof PolicyError) throw error;

@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createSocket } from "node:dgram";
 import { once } from "node:events";
 import { createServer, isIPv4 } from "node:net";
@@ -9,6 +10,7 @@ import { Resolver } from "./dns.ts";
 import { ByteReader, write } from "./protocol.ts";
 
 type Target = { host: string; port: number };
+export type SocksAuth = { username: string; password: string };
 
 async function target(reader: ByteReader, kind: number): Promise<Target> {
   let host: string;
@@ -41,7 +43,12 @@ export class SocksServer {
     this.port = port;
   }
 
-  static async listen(stack: NetworkStack, dns: string, port = 1088): Promise<SocksServer> {
+  static async listen(
+    stack: NetworkStack,
+    dns: string,
+    port = 1088,
+    auth?: SocksAuth,
+  ): Promise<SocksServer> {
     const clients = new Set<Socket>();
     const resolver = new Resolver(stack, dns);
     const server = createServer({ allowHalfOpen: true }, (socket) => {
@@ -49,7 +56,7 @@ export class SocksServer {
       socket.on("error", () => {});
       socket.once("close", () => clients.delete(socket));
       socket.setTimeout(15_000, () => socket.destroy());
-      void serve(socket, stack, resolver).catch((error: unknown) => {
+      void serve(socket, stack, resolver, auth).catch((error: unknown) => {
         console.error(
           "Campus SOCKS connection failed:",
           error instanceof Error ? error.message : "Unknown error",
@@ -73,7 +80,12 @@ export class SocksServer {
   }
 }
 
-async function serve(socket: Socket, stack: NetworkStack, resolver: Resolver): Promise<void> {
+async function serve(
+  socket: Socket,
+  stack: NetworkStack,
+  resolver: Resolver,
+  auth?: SocksAuth,
+): Promise<void> {
   const controller = new AbortController();
   socket.once("close", () => controller.abort());
   const reader = new ByteReader(socket);
@@ -83,13 +95,20 @@ async function serve(socket: Socket, stack: NetworkStack, resolver: Resolver): P
     return;
   }
   const methods = await reader.read(greeting[1]);
-  if (!methods.includes(0)) {
+  // Method 2 is RFC 1929 username/password, method 0 is no authentication.
+  const method = auth ? 2 : 0;
+  if (!methods.includes(method)) {
     await write(socket, Buffer.from([5, 255]));
     socket.end();
     return;
   }
 
-  await write(socket, Buffer.from([5, 0]));
+  await write(socket, Buffer.from([5, method]));
+  if (auth && !(await authenticate(socket, reader, auth))) {
+    socket.end();
+    return;
+  }
+
   const request = await reader.read(4);
   if (request[0] !== 5 || request[2] !== 0) throw new Error("Invalid SOCKS request");
   if (request[3] === 4) {
@@ -136,6 +155,20 @@ async function serve(socket: Socket, stack: NetworkStack, resolver: Resolver): P
     writer.releaseLock();
     await connection.close();
   }
+}
+
+async function authenticate(socket: Socket, reader: ByteReader, auth: SocksAuth): Promise<boolean> {
+  const version = (await reader.read(1))[0];
+  const username = await reader.read((await reader.read(1))[0]);
+  const password = await reader.read((await reader.read(1))[0]);
+  // Comparing digests keeps the time independent of where the inputs differ.
+  const digest = (value: Buffer | string) => createHash("sha256").update(value).digest();
+  const accepted =
+    version === 1 &&
+    timingSafeEqual(digest(username), digest(auth.username)) &&
+    timingSafeEqual(digest(password), digest(auth.password));
+  await write(socket, Buffer.from([1, accepted ? 0 : 1]));
+  return accepted;
 }
 
 async function associate(

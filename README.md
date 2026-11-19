@@ -24,6 +24,8 @@ The proxy listens on `127.0.0.1:1088`. Use `--port` during login to choose anoth
 curl --socks5-hostname 127.0.0.1:1088 https://its.suda.edu.cn/
 ```
 
+On a shared machine, other accounts can reach the same local port. `login --socks-user name` asks for a password and makes the proxy require SOCKS5 username/password authentication; clients then connect with `socks5h://name:password@127.0.0.1:1088`. The password is saved with the other settings. `--socks-user ""` turns authentication off again.
+
 The client leaves system routes and DNS settings unchanged. IPv6 requests receive an unsupported-address response.
 
 ```sh

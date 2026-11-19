@@ -6,8 +6,9 @@ import { loadConfig, portNumber, saveConfig } from "./config.ts";
 import { Controller, serverOrigin } from "./controller.ts";
 import { CredentialStore } from "./credentials.ts";
 import { login } from "./login.ts";
+import { askSecret } from "./prompt.ts";
 
-const HELP = `openenlink login --server https://vpn.example.edu [--browser path] [--port 1088] [--remember]
+const HELP = `openenlink login --server https://vpn.example.edu [--browser path] [--port 1088] [--socks-user name] [--remember]
 openenlink serve
 openenlink status
 openenlink logout`;
@@ -21,6 +22,7 @@ async function main(): Promise<void> {
       port: { type: "string" },
       remember: { type: "boolean" },
       server: { type: "string" },
+      "socks-user": { type: "string" },
     },
   });
   if (values.help || !positionals.length) return console.log(HELP);
@@ -31,10 +33,20 @@ async function main(): Promise<void> {
   const previous = await loadConfig();
   const server = values.server ?? previous?.server;
   if (!server) throw new Error("Run login with --server https://your-campus-gateway");
+  const socksUser = values["socks-user"];
+  let socks = previous?.socks;
+  if (socksUser === "") socks = undefined;
+  else if (socksUser !== undefined) {
+    socks = { username: socksUser, password: await askSecret("SOCKS password: ") };
+    if (Object.values(socks).some((value) => !value || Buffer.byteLength(value) > 255))
+      throw new Error("SOCKS username and password must be 1 to 255 bytes");
+  }
+
   const config = {
     browser: values.browser ?? previous?.browser,
     port: portNumber(values.port ?? previous?.port ?? 1088),
     server: serverOrigin(server),
+    socks,
   };
   const store = new CredentialStore(config.server);
   if (command === "login") {
