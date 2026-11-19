@@ -68,6 +68,34 @@ jobs:
       - name: Test
         run: npm test
 
+  keyring:
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+    env:
+      OPENENLINK_TEST_KEYRING: 1
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: latest
+
+      - name: Test the OS credential store
+        if: runner.os != 'Linux'
+        run: node --test test/keyring.test.ts
+
+      - name: Test Secret Service under an unlocked GNOME Keyring
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gnome-keyring libsecret-1-0
+          dbus-run-session -- sh -c 'printf openenlink | gnome-keyring-daemon --unlock --components=secrets > /dev/null && node --test test/keyring.test.ts'
+
   build:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
 
@@ -130,7 +158,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [typecheck, lint, test, build]
+    needs: [typecheck, lint, test, keyring, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write

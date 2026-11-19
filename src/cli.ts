@@ -114,8 +114,15 @@ async function main(): Promise<void> {
       if (values.remember && account) await store.savePassword({ ...account, cookies });
       else await store.clearPassword();
       await saveConfig({ ...config, ...(account ? { user: account.username } : {}) });
-      if (previous && Boolean(previous.insecureStorage) !== Boolean(config.insecureStorage))
-        await credentialStore(previous).clear();
+      if (previous && Boolean(previous.insecureStorage) !== Boolean(config.insecureStorage)) {
+        const old = credentialStore(previous);
+        await old.clear().catch((error: unknown) => {
+          const reason = error instanceof Error ? error.message : String(error);
+          console.warn(
+            `Could not remove the copy in ${old.file ?? "the OS credential store"}: ${reason}`,
+          );
+        });
+      }
       console.log(`Signed in as ${await controller.user(credentials.accessToken)}`);
       if (values.remember && !account)
         console.log("A browser sign-in leaves no password to remember for serve.");

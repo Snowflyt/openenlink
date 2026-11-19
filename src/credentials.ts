@@ -1,9 +1,8 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { AsyncEntry } from "@napi-rs/keyring";
-
 import { text } from "./controller.ts";
+import { osKeyring } from "./keyring.ts";
 import type { Cookie } from "./web.ts";
 
 export type Credentials = { accessToken: string; refreshToken?: string };
@@ -83,15 +82,14 @@ export class CredentialStore {
       const value = entry === undefined ? undefined : saved(entry)[secret];
       return value === undefined ? undefined : saved(value);
     }
-    const value = await new AsyncEntry(SERVICES[secret], this.origin).getPassword();
-    return value === null ? undefined : parse(value);
+    const value = osKeyring().read(SERVICES[secret], this.origin);
+    return value === undefined ? undefined : parse(value);
   }
 
   private async write(secret: Secret, value: object | undefined): Promise<void> {
     if (!this.file) {
-      const entry = new AsyncEntry(SERVICES[secret], this.origin);
-      if (value === undefined) await entry.deletePassword();
-      else await entry.setPassword(JSON.stringify(value));
+      if (value === undefined) osKeyring().delete(SERVICES[secret], this.origin);
+      else osKeyring().write(SERVICES[secret], this.origin, JSON.stringify(value));
       return;
     }
 

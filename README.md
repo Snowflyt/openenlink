@@ -8,7 +8,7 @@ Tested with Soochow University's OIDC login, campus websites and SSH. Servers re
 
 Each [release](https://github.com/Snowflyt/openenlink/releases) carries a single executable for macOS (arm64), Linux (x64, arm64; `-gnu` for glibc distributions, `-musl` for Alpine) and Windows (x64), named after its platform. Rename it to `openenlink` (`openenlink.exe` on Windows), run `chmod +x openenlink` on macOS and Linux, then `openenlink login https://wvpn.suda.edu.cn` and `openenlink serve`. macOS rejects a file downloaded through a browser until `xattr -d com.apple.quarantine openenlink` clears the flag. The examples below run from source with `npm start --`; the executable takes the same arguments.
 
-To run from source, install Node.js 24 or newer, Git and curl, then:
+To run from source, install Node.js 26.9 or newer, Git and curl, then:
 
 ```sh
 git clone --recursive https://github.com/Snowflyt/openenlink.git
@@ -57,9 +57,9 @@ npm start -- logout
 
 `logout` removes this client's saved authorization. Commands exit with status 2 on usage errors and 3 when someone needs to run `login`, so a script that restarts `serve` can stop at 3. `Ctrl+C` stops the proxy. After a dropped tunnel, the client retries with a delay of up to 30 seconds. It renews expired access tokens with a refresh token or remembered password. Run `login` when credentials expire or the school requests verification.
 
-Settings are saved in `$XDG_CONFIG_HOME/openenlink/config.json` (`~/.config/openenlink/config.json` when it is unset), or `%APPDATA%\openenlink\config.json` on Windows. Authorization stays in the OS credential store. Linux needs Secret Service or the kernel keyring; kernel-keyring credentials last until reboot.
+Settings are saved in `$XDG_CONFIG_HOME/openenlink/config.json` (`~/.config/openenlink/config.json` when it is unset), or `%APPDATA%\openenlink\config.json` on Windows. Authorization stays in the OS credential store. Linux needs libsecret and a Secret Service such as GNOME Keyring or KWallet.
 
-Hosts without a credential store, including Docker containers (the default seccomp profile blocks the kernel keyring), can use `login --insecure-storage`. It keeps the authorization and any remembered password as plain JSON in `credentials.json` next to `config.json`, readable only by its owner. Each `login` chooses again: a later `login` without the flag returns to the OS credential store and removes the copy in the file.
+Hosts without a credential store, such as Docker containers and servers without a desktop session, can use `login --insecure-storage`. It keeps the authorization and any remembered password as plain JSON in `credentials.json` next to `config.json`, readable only by its owner. Each `login` chooses again: a later `login` without the flag returns to the OS credential store and removes the copy in the file.
 
 ## Development
 
@@ -73,6 +73,6 @@ Tests cover a local TLS gateway, certificate rejection, SOCKS TCP/UDP, HTTP CONN
 
 `npm install` builds `tcpip` 0.4.0 from the `vendor/tcpip.js` submodule with `vendor/tcpip.js.patch` applied. The JavaScript fixes keep the write side open after a peer FIN and free packet buffers copied into WASM memory. The WASM, compiled from `vendor/lwip` (lwIP 2.2.0), delivers every pbuf of out-of-order data, sends chained outgoing packets whole and copies incoming packets before lwIP queues them. A connection that the peer resets or lwIP aborts rejects its pending connect and errors its streams. Without these, one lost packet could stall or corrupt a connection. It also uses a 182 KiB window with window scaling instead of 5.6 KiB, and a 1 s initial retransmission timeout instead of 3 s. The first install downloads wasi-sdk 24 into `.cache` to compile it. After changing the submodule, `git -C vendor/tcpip.js diff > vendor/tcpip.js.patch` saves the patch and `npm install` rebuilds. That dependency is pinned until the fixes are available upstream.
 
-`npm run build` writes a single executable for the current platform to `dist/openenlink`, or `dist/openenlink.exe` on Windows. The build strips the types from `src` with ts-blank-space, leaving the JavaScript line for line as written, and the executable carries that with the runtime dependencies, `tcpip.wasm` and the credential-store addon in its virtual file system. They run from there without unpacking; only the addon passes through a private temporary file while it loads. The virtual file system needs Node.js 27.0.0-alpha.0.1.1 or newer from [nodejs.org](https://nodejs.org/), so with an older Node.js the build downloads that release into `dist` first. Node.js 27 no longer ships for Intel Macs, so they run from source. Pushing a `v*` tag builds every platform in GitHub Actions and attaches them to a release.
+`npm run build` writes a single executable for the current platform to `dist/openenlink`, or `dist/openenlink.exe` on Windows. The build strips the types from `src` with ts-blank-space, leaving the JavaScript line for line as written, and the executable carries that with the runtime dependencies and `tcpip.wasm` in its virtual file system, and they run from there without unpacking. The virtual file system needs Node.js 27.0.0-alpha.0.1.1 or newer from [nodejs.org](https://nodejs.org/), so with an older Node.js the build downloads that release into `dist` first. Node.js 27 no longer ships for Intel Macs, so they run from source. Pushing a `v*` tag builds every platform in GitHub Actions and attaches them to a release.
 
 Protocol details are in [docs/protocol.md](docs/protocol.md).
