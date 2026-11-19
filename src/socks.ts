@@ -3,7 +3,7 @@ import { once } from "node:events";
 import { isIPv4 } from "node:net";
 import type { Socket } from "node:net";
 
-import type { NetworkStack, UdpSocket } from "tcpip";
+import type { NetworkStack, UdpSocket } from "#tcpip";
 
 import type { Resolver } from "./dns.ts";
 import type { ByteReader } from "./protocol.ts";

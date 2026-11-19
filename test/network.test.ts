@@ -12,7 +12,8 @@ import { Worker, isMainThread, parentPort, workerData } from "node:worker_thread
 import { DnsServer } from "@tcpip/dns";
 import { parseIPv4Packet, serializeIPv4Packet } from "@tcpip/wire";
 import { generate } from "selfsigned";
-import { createStack } from "tcpip";
+
+import { createStack } from "#tcpip";
 
 import { ByteReader, write } from "../src/protocol.ts";
 import { ProxyServer } from "../src/proxy.ts";

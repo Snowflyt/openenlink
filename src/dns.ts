@@ -3,7 +3,8 @@ import { isIPv4 } from "node:net";
 import { domainToASCII } from "node:url";
 
 import packet from "dns-packet";
-import type { NetworkStack } from "tcpip";
+
+import type { NetworkStack } from "#tcpip";
 
 export class Resolver {
   private readonly stack: NetworkStack;

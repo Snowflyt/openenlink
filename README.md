@@ -6,9 +6,11 @@ Tested with Soochow University's OIDC login, campus websites and SSH. Servers re
 
 ## Run
 
-Install Node.js 22.19.0 or newer, then:
+Install Node.js 24 or newer, Git and curl, then:
 
 ```sh
+git clone --recursive https://github.com/Snowflyt/openenlink.git
+cd openenlink
 npm install
 npm start -- login https://wvpn.suda.edu.cn
 npm start -- serve
@@ -59,6 +61,6 @@ npm run lint
 
 Tests cover a local TLS gateway, certificate rejection, SOCKS TCP/UDP, HTTP CONNECT and request forwarding, `nc`, compressed and loopback DNS replies, connection half-close, TCP under packet loss and reordering, controller signing and SSO callback interception in Chromium. Browser tests require Chrome or Chromium. Each tunnel runs in a worker so disconnecting releases its WASM memory and timers.
 
-The install step patches `tcpip` 0.4.0 from `patches/tcpip`. The JavaScript fixes keep the write side open after a peer FIN and free packet buffers copied into WASM memory. The rebuilt WASM delivers every pbuf of out-of-order data, sends chained outgoing packets whole and copies incoming packets before lwIP queues them. Without these, one lost packet could stall or corrupt a connection. It also uses a 182 KiB window with window scaling instead of 5.6 KiB, and a 1 s initial retransmission timeout instead of 3 s. `patches/tcpip/build.sh` rebuilds `tcpip.wasm` from `lwip-glue.patch` with wasi-sdk 24. That dependency is pinned until the fixes are available upstream.
+`npm install` builds `tcpip` 0.4.0 from the `vendor/tcpip.js` submodule with `vendor/tcpip.js.patch` applied. The JavaScript fixes keep the write side open after a peer FIN and free packet buffers copied into WASM memory. The WASM, compiled from `vendor/lwip` (lwIP 2.2.0), delivers every pbuf of out-of-order data, sends chained outgoing packets whole and copies incoming packets before lwIP queues them. Without these, one lost packet could stall or corrupt a connection. It also uses a 182 KiB window with window scaling instead of 5.6 KiB, and a 1 s initial retransmission timeout instead of 3 s. The first install downloads wasi-sdk 24 into `.cache` to compile it. After changing the submodule, `git -C vendor/tcpip.js diff > vendor/tcpip.js.patch` saves the patch and `npm install` rebuilds. That dependency is pinned until the fixes are available upstream.
 
 Protocol details are in [docs/protocol.md](docs/protocol.md).

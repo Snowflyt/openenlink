@@ -1,6 +1,6 @@
 import type { Socket } from "node:net";
 
-import type { NetworkStack } from "tcpip";
+import type { NetworkStack } from "#tcpip";
 
 import type { Resolver } from "./dns.ts";
 import type { ByteReader } from "./protocol.ts";

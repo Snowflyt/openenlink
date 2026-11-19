@@ -1,6 +1,6 @@
 import type { Socket } from "node:net";
 
-import type { TcpConnection } from "tcpip";
+import type { TcpConnection } from "#tcpip";
 
 import type { ByteReader } from "./protocol.ts";
 import { write } from "./protocol.ts";

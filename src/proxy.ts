@@ -3,7 +3,7 @@ import { once } from "node:events";
 import { createServer } from "node:net";
 import type { Server, Socket } from "node:net";
 
-import type { NetworkStack } from "tcpip";
+import type { NetworkStack } from "#tcpip";
 
 import { Resolver } from "./dns.ts";
 import { serveHttp } from "./http.ts";

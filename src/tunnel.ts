@@ -2,8 +2,8 @@ import { once } from "node:events";
 import type { ConnectionOptions, TLSSocket } from "node:tls";
 import { connect } from "node:tls";
 
-import { createStack } from "tcpip";
-import type { NetworkStack, TunInterface } from "tcpip";
+import { createStack } from "#tcpip";
+import type { NetworkStack, TunInterface } from "#tcpip";
 
 import { rewriteAddress } from "./packet.ts";
 import {

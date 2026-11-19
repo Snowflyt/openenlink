@@ -4,8 +4,8 @@ import { once } from "node:events";
 import { test } from "node:test";
 import { Worker, isMainThread, parentPort } from "node:worker_threads";
 
-import { createStack } from "tcpip";
-import type { TcpConnection, TunInterface } from "tcpip";
+import { createStack } from "#tcpip";
+import type { TcpConnection, TunInterface } from "#tcpip";
 
 if (isMainThread) {
   await test(

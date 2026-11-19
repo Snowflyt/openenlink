@@ -1,0 +1,7 @@
+[submodule "vendor/tcpip.js"]
+	path = vendor/tcpip.js
+	url = https://github.com/chipmk/tcpip.js.git
+	ignore = dirty
+[submodule "vendor/lwip"]
+	path = vendor/lwip
+	url = https://github.com/lwip-tcpip/lwip.git

@@ -1,7 +1,82 @@
-diff --git a/wasm/include/lwipopts.h b/wasm/include/lwipopts.h
+diff --git a/packages/tcpip/src/bindings/tcp.ts b/packages/tcpip/src/bindings/tcp.ts
+index 6095c6a..c46308b 100644
+--- a/packages/tcpip/src/bindings/tcp.ts
++++ b/packages/tcpip/src/bindings/tcp.ts
+@@ -153,7 +153,8 @@ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
+ 
+       tcpConnectionHooks.setOuter(connection, {
+         send: async (data) => {
+-          const dataPtr = Number(this.copyToMemory(data));
++          using dataCopy = this.copyToMemory(data);
++          const dataPtr = Number(dataCopy);
+ 
+           let bytesQueued = this.exports.send_tcp_chunk(
+             connectionHandle,
+@@ -200,7 +201,8 @@ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
+ 
+       tcpConnectionHooks.setOuter(connection, {
+         send: async (data) => {
+-          const dataPtr = Number(this.copyToMemory(data));
++          using dataCopy = this.copyToMemory(data);
++          const dataPtr = Number(dataCopy);
+ 
+           let bytesQueued = this.exports.send_tcp_chunk(
+             handle,
+@@ -426,7 +428,6 @@ export class VirtualTcpConnection
+   #enqueueBuffer() {
+     if (this.#remoteClosed && this.#receiveBuffer.length === 0) {
+       this.#closeReadable();
+-      this.#writableController?.error(new Error('tcp connection closed'));
+       return;
+     }
+ 
+@@ -461,7 +462,6 @@ export class VirtualTcpConnection
+ 
+     if (this.#remoteClosed && this.#receiveBuffer.length === 0) {
+       this.#closeReadable();
+-      this.#writableController?.error(new Error('tcp connection closed'));
+     }
+   }
+ 
+diff --git a/packages/tcpip/src/bindings/tun-interface.ts b/packages/tcpip/src/bindings/tun-interface.ts
+index 52e8a78..cf23094 100644
+--- a/packages/tcpip/src/bindings/tun-interface.ts
++++ b/packages/tcpip/src/bindings/tun-interface.ts
+@@ -60,7 +60,7 @@ export class TunBindings extends Bindings<TunImports, TunExports> {
+       tunInterfaceHooks.setOuter(tunInterface, {
+         handle,
+         sendPacket: (packet) => {
+-          const packetPtr = this.copyToMemory(packet);
++          using packetPtr = this.copyToMemory(packet);
+           this.exports.send_tun_interface(handle, packetPtr, packet.length);
+         },
+         getIPv4Address: () => {
+diff --git a/packages/tcpip/src/util.ts b/packages/tcpip/src/util.ts
+index e44e7e1..e7c590e 100644
+--- a/packages/tcpip/src/util.ts
++++ b/packages/tcpip/src/util.ts
+@@ -23,7 +23,7 @@ export class Hooks<K extends WeakKey, O, I> {
+     const hooks = this.#outerHooks.get(key);
+ 
+     if (!hooks) {
+-      throw new Error(`outer hooks not set for ${key}`);
++      throw new Error(`outer hooks not set for ${String(key)}`);
+     }
+ 
+     return hooks;
+@@ -33,7 +33,7 @@ export class Hooks<K extends WeakKey, O, I> {
+     const hooks = this.#innerHooks.get(key);
+ 
+     if (!hooks) {
+-      throw new Error(`inner hooks not set for ${key}`);
++      throw new Error(`inner hooks not set for ${String(key)}`);
+     }
+ 
+     return hooks;
+diff --git a/packages/tcpip/wasm/include/lwipopts.h b/packages/tcpip/wasm/include/lwipopts.h
 index f756c7f..feb2d01 100644
---- a/wasm/include/lwipopts.h
-+++ b/wasm/include/lwipopts.h
+--- a/packages/tcpip/wasm/include/lwipopts.h
++++ b/packages/tcpip/wasm/include/lwipopts.h
 @@ -18,7 +18,7 @@
  
  // Memory options
@@ -26,10 +101,10 @@ index f756c7f..feb2d01 100644
  #define TCP_SND_QUEUELEN (2 * TCP_SND_BUF / TCP_MSS)  // TCP send queue length
  #define MEMP_NUM_TCP_PCB 256                          // Number of simultaneously active TCP PCBs
  #define MEMP_NUM_TCP_PCB_LISTEN 256                   // Number of simultaneously active listening TCP PCBs
-diff --git a/wasm/tcp.c b/wasm/tcp.c
+diff --git a/packages/tcpip/wasm/tcp.c b/packages/tcpip/wasm/tcp.c
 index cd80c1b..d9a995d 100644
---- a/wasm/tcp.c
-+++ b/wasm/tcp.c
+--- a/packages/tcpip/wasm/tcp.c
++++ b/packages/tcpip/wasm/tcp.c
 @@ -18,7 +18,9 @@ void update_tcp_receive_buffer(struct tcp_pcb *conn, uint16_t length) {
  
  EXPORT("send_tcp_chunk")
@@ -53,10 +128,10 @@ index cd80c1b..d9a995d 100644
    pbuf_free(p);
  
    return ERR_OK;
-diff --git a/wasm/tun_interface.c b/wasm/tun_interface.c
+diff --git a/packages/tcpip/wasm/tun_interface.c b/packages/tcpip/wasm/tun_interface.c
 index 93704e7..69ebc77 100644
---- a/wasm/tun_interface.c
-+++ b/wasm/tun_interface.c
+--- a/packages/tcpip/wasm/tun_interface.c
++++ b/packages/tcpip/wasm/tun_interface.c
 @@ -8,8 +8,20 @@ extern void register_tun_interface(struct netif *netif);
  extern void receive_packet(struct netif *netif, const uint8_t *packet, uint16_t length);
  

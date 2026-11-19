@@ -6,13 +6,19 @@
   "license": "AGPL-3.0-or-later",
   "author": "Ge Gao (Snowflyt) <gaoge011022@gmail.com>",
   "type": "module",
+  "imports": {
+    "#tcpip": {
+      "types": "./vendor/tcpip.js/packages/tcpip/src/index.ts",
+      "default": "./vendor/tcpip.js/packages/tcpip/dist/index.js"
+    }
+  },
   "bin": {
     "openenlink": "src/cli.ts"
   },
   "scripts": {
     "commitlint": "commitlint --edit",
-    "format": "prettier --write \"**/*.{ts,js,cjs,json,md}\"",
-    "postinstall": "node patches/tcpip/apply.js && node -e \"import { execFileSync } from 'node:child_process'; import fs from 'node:fs'; if (fs.existsSync('.git')) execFileSync('git', ['config', 'core.hooksPath', '.githooks']);\"",
+    "format": "prettier --write \"*.{js,cjs,json,md}\" \"{src,test,docs}/**/*.{ts,md}\"",
+    "postinstall": "git submodule update --init vendor/tcpip.js vendor/lwip && node -e \"import { execFileSync } from 'node:child_process'; try { execFileSync('git', ['apply', '--reverse', '--check', '../tcpip.js.patch'], { cwd: 'vendor/tcpip.js', stdio: 'ignore' }); } catch { execFileSync('git', ['apply', '../tcpip.js.patch'], { cwd: 'vendor/tcpip.js', stdio: 'inherit' }); }\" && node --disable-warning=ExperimentalWarning -e \"import fs from 'node:fs'; import { stripTypeScriptTypes } from 'node:module'; import path from 'node:path'; const source = 'vendor/tcpip.js/packages/tcpip/src'; const dist = 'vendor/tcpip.js/packages/tcpip/dist'; fs.rmSync(dist, { force: true, recursive: true }); for (const file of fs.readdirSync(source, { encoding: 'utf8', recursive: true })) { if (!file.endsWith('.ts') || /\\.test(-d)?\\.ts$/.test(file)) continue; const output = path.join(dist, file.replace(/\\.ts$/, '.js')); fs.mkdirSync(path.dirname(output), { recursive: true }); fs.writeFileSync(output, stripTypeScriptTypes(fs.readFileSync(path.join(source, file), 'utf8'))); }\" && node -e \"import { execFileSync } from 'node:child_process'; import fs from 'node:fs'; if (!fs.existsSync('.cache/wasi-sdk-24')) { const platform = { 'darwin-arm64': 'arm64-macos', 'darwin-x64': 'x86_64-macos', 'linux-arm64': 'arm64-linux', 'linux-x64': 'x86_64-linux', 'win32-x64': 'x86_64-windows' }[process.platform + '-' + process.arch]; if (!platform) throw new Error('wasi-sdk 24 has no build for ' + process.platform + '-' + process.arch); const name = 'wasi-sdk-24.0-' + platform; fs.mkdirSync('.cache', { recursive: true }); execFileSync('curl', ['-fL', '-o', name + '.tar.gz', 'https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-24/' + name + '.tar.gz'], { cwd: '.cache', stdio: 'inherit' }); execFileSync('tar', ['-xzf', name + '.tar.gz'], { cwd: '.cache', stdio: 'inherit' }); fs.rmSync('.cache/' + name + '.tar.gz'); fs.renameSync('.cache/' + name, '.cache/wasi-sdk-24'); }\" && node -e \"import { execFileSync } from 'node:child_process'; import fs from 'node:fs'; const tcpip = 'vendor/tcpip.js/packages/tcpip'; const lwip = 'vendor/lwip/src'; const files = (makefile, variable, directory) => new RegExp('^' + variable + '=(.*)', 'm').exec(fs.readFileSync(makefile, 'utf8').replaceAll(/\\x5c\\r?\\n/g, ' '))[1].trim().split(/\\s+/).map((file) => file.replace(/^[$][(]\\w+[)]/, directory)); execFileSync('.cache/wasi-sdk-24/bin/clang', ['--target=wasm32-wasi', '-I' + lwip + '/include', '-I' + tcpip + '/wasm/include', '-Oz', '-Wall', '-std=c11', '-Wl,--gc-sections,--strip-all,--export=malloc,--export=free,--allow-undefined', '-mexec-model=reactor', '-o', tcpip + '/tcpip.wasm', ...files(tcpip + '/wasm/Filelists.mk', 'SRC_FILES', tcpip + '/wasm'), ...['COREFILES', 'CORE4FILES', 'NETIFFILES'].flatMap((variable) => files(lwip + '/Filelists.mk', variable, lwip))], { stdio: 'inherit' });\" && node -e \"import { execFileSync } from 'node:child_process'; import fs from 'node:fs'; if (fs.existsSync('.git')) execFileSync('git', ['config', 'core.hooksPath', '.githooks']);\"",
     "lint": "eslint \"{src,test}/**/*.ts\" \"*.{js,cjs}\" --max-warnings 0",
     "lint:fix": "eslint \"{src,test}/**/*.ts\" \"*.{js,cjs}\" --fix --max-warnings 0",
     "start": "node src/cli.ts",
@@ -20,16 +26,18 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
+    "@bjorn3/browser_wasi_shim": "^0.3.0",
     "@napi-rs/keyring": "^2.1.2",
+    "@tcpip/dns": "0.3.0",
+    "@tcpip/transport": "0.1.0",
+    "@tcpip/wire": "0.1.4",
     "dns-packet": "^5.6.1",
     "puppeteer-core": "^25.16.0",
-    "tcpip": "0.4.0",
     "undici": "^8.12.3"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.4",
     "@eslint/js": "^10.0.1",
-    "@tcpip/dns": "^0.3.0",
     "@types/dns-packet": "^5.6.5",
     "@types/node": "~26.6.6",
     "eslint": "^10.13.0",
@@ -49,6 +57,6 @@
     "typescript7": "npm:@typescript/native-preview@^7.0.0-dev.20260707.2"
   },
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=24"
   }
 }
