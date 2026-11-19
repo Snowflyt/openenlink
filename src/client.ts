@@ -23,6 +23,7 @@ export async function serve(
   try {
     for (;;) {
       signal.throwIfAborted();
+      const started = Date.now();
       const credentials = await store.load();
       if (!credentials) throw new AuthenticationError("Run login to authorize this client");
       try {
@@ -33,15 +34,16 @@ export async function serve(
           config.browser,
         );
         const gateway = gateways[gatewayIndex++ % gateways.length];
-        await runWorker({ gateway, ...listener, token, user }, signal, () => {
-          retry = 1000;
-        });
+        await runWorker({ gateway, ...listener, token, user }, signal);
       } catch (error) {
         signal.throwIfAborted();
         if (error instanceof AuthenticationError || error instanceof PolicyError) throw error;
         console.error(error instanceof Error ? error.message : "Campus connection failed");
       }
       signal.throwIfAborted();
+      // Another client on the same account ends our tunnel right after it starts; growing the
+      // delay keeps the two from replacing each other every second.
+      if (Date.now() - started > 60_000) retry = 1000;
       console.error(`Reconnecting in ${retry / 1000} seconds`);
       await setTimeout(retry, undefined, { signal });
       retry = Math.min(retry * 2, 30_000);
@@ -87,11 +89,7 @@ async function session(
   }
 }
 
-async function runWorker(
-  options: TunnelOptions,
-  signal: AbortSignal,
-  connected: () => void,
-): Promise<void> {
+async function runWorker(options: TunnelOptions, signal: AbortSignal): Promise<void> {
   // Ending the worker releases lwIP's timer, sockets and WASM memory together.
   const worker = new Worker(new URL("./worker.ts", import.meta.url), { workerData: options });
   const stop = () => {
@@ -99,7 +97,6 @@ async function runWorker(
   };
   signal.addEventListener("abort", stop, { once: true });
   worker.once("message", () => {
-    connected();
     console.log(`Campus SOCKS listening on 127.0.0.1:${options.port}`);
   });
 
