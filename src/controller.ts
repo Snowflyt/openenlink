@@ -169,7 +169,7 @@ export function tunnelRules(rules: Record<string, unknown>): {
       gateway.internalDnsResolveStatus === "true" ?
         ipv4Address(text(gateway.dns, "campus DNS"))
       : undefined;
-    return { host, port: Number(endpoint.port || 443), serverName: host, ...(dns ? { dns } : {}) };
+    return { host, port: Number(endpoint.port || 443), ...(dns ? { dns } : {}) };
   });
   if (!gateways.length) throw new Error("Controller returned no public gateways");
   return { gateways, token: text(rules.token, "tunnel token") };

@@ -75,7 +75,7 @@ await test("Controller distinguishes expired authorization from malformed replie
       token: "tunnel",
     }),
     {
-      gateways: [{ host: "gateway.example.test", port: 8443, serverName: "gateway.example.test" }],
+      gateways: [{ host: "gateway.example.test", port: 8443 }],
       token: "tunnel",
     },
   );

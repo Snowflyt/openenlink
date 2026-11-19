@@ -50,7 +50,7 @@ export class Tunnel {
       minVersion: "TLSv1.2",
       port: gateway.port,
       rejectUnauthorized: true,
-      servername: gateway.serverName ?? gateway.host,
+      ...(gateway.serverName && { servername: gateway.serverName }),
     });
     socket.on("error", () => {});
     socket.setTimeout(15_000, () => socket.destroy(new Error("Campus gateway timed out")));
