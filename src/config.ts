@@ -7,7 +7,8 @@ import { CredentialStore } from "./credentials.ts";
 
 export type Config = {
   server: string;
-  browser?: string;
+  // The last school username, offered as the default at login.
+  user?: string;
   userAgent?: string;
   insecureStorage?: boolean;
 };
@@ -48,7 +49,7 @@ export async function loadConfig(): Promise<Config | undefined> {
   const config = object(JSON.parse(saved));
   return {
     server: serverOrigin(text(config.server, "server address")),
-    ...(typeof config.browser === "string" ? { browser: config.browser } : {}),
+    ...(typeof config.user === "string" && config.user ? { user: config.user } : {}),
     ...(typeof config.userAgent === "string" ? { userAgent: config.userAgent } : {}),
     ...(config.insecureStorage === true ? { insecureStorage: true } : {}),
   };

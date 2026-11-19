@@ -18,9 +18,13 @@ npm start -- login https://wvpn.suda.edu.cn
 npm start -- serve
 ```
 
-Login opens an isolated Chrome window on the school's SSO page. Enter school credentials there. The client keeps authorization in the OS credential store until `logout` and removes the temporary browser profile. Chrome or Chromium must be installed; `--browser` selects an executable. Close other clients using the same campus account before logging in.
+Login signs in on the school's SSO page from the terminal. It asks for the school username, offering the last one as the default (`--user name` skips the question), and the password. When the school asks for a captcha, it shows the image with iTerm2 inline images (iTerm2, WezTerm, Konsole), the kitty graphics protocol, sixel or colored half blocks; other terminals get a private temporary file whose path is printed. The client keeps authorization in the OS credential store until `logout`. Close other clients using the same campus account before logging in.
 
-Use `login --remember` to save a CAS username and password in the OS credential store. When a campus session ends, the client signs in again through the school page in a background browser. The saved password is filled only on its original HTTPS origin. A failed sign-in waits five minutes before another attempt; verification challenges can be completed with `login --remember`. `logout` removes both the authorization and remembered password.
+Terminal sign-in knows Soochow University's CAS page. On any other school page, or after an empty username or captcha answer, login prints the gateway's sign-in address to open in a browser. When the browser finishes, paste the address it ends on, or the value of the gateway's `access_token` cookie from the developer tools.
+
+Use `login --remember` to save a CAS username and password in the OS credential store, along with the school's session cookies. When a campus session ends, the client signs in again with those cookies, and with the password once they expire. The password is posted only to the HTTPS origin where it was typed. A failed sign-in waits five minutes before another attempt, a wrong password removes the remembered one, and a captcha needs `login --remember` again. `logout` removes both the authorization and remembered password.
+
+School sign-in trusts the certificates Node.js trusts. For a school behind a private certificate authority, set `NODE_EXTRA_CA_CERTS=/path/to/ca.pem`.
 
 The proxy listens on `127.0.0.1:1088` while `serve` runs; `serve --port` chooses another port. The port accepts SOCKS5 (CONNECT and UDP ASSOCIATE over IPv4) and HTTP proxy requests, including CONNECT. Destination DNS queries use the campus resolver inside the tunnel, so SOCKS clients should resolve names through the proxy. For example:
 
@@ -65,7 +69,7 @@ npm run typecheck
 npm run lint
 ```
 
-Tests cover a local TLS gateway, certificate rejection, SOCKS TCP/UDP, HTTP CONNECT and request forwarding, `nc`, compressed and loopback DNS replies, connection half-close, TCP under packet loss and reordering, controller signing and SSO callback interception in Chromium. Browser tests require Chrome or Chromium. Each tunnel runs in a worker so disconnecting releases its WASM memory and timers.
+Tests cover a local TLS gateway, certificate rejection, SOCKS TCP/UDP, HTTP CONNECT and request forwarding, `nc`, compressed and loopback DNS replies, connection half-close, TCP under packet loss and reordering, controller signing, terminal sign-in against a local school page (session cookies, captcha retries, a changed page, wrong passwords, gateway errors, pasted results, renewal in `serve`), JPEG decoding against libjpeg and terminal image output. Each tunnel runs in a worker so disconnecting releases its WASM memory and timers.
 
 `npm install` builds `tcpip` 0.4.0 from the `vendor/tcpip.js` submodule with `vendor/tcpip.js.patch` applied. The JavaScript fixes keep the write side open after a peer FIN and free packet buffers copied into WASM memory. The WASM, compiled from `vendor/lwip` (lwIP 2.2.0), delivers every pbuf of out-of-order data, sends chained outgoing packets whole and copies incoming packets before lwIP queues them. A connection that the peer resets or lwIP aborts rejects its pending connect and errors its streams. Without these, one lost packet could stall or corrupt a connection. It also uses a 182 KiB window with window scaling instead of 5.6 KiB, and a 1 s initial retransmission timeout instead of 3 s. The first install downloads wasi-sdk 24 into `.cache` to compile it. After changing the submodule, `git -C vendor/tcpip.js diff > vendor/tcpip.js.patch` saves the patch and `npm install` rebuilds. That dependency is pinned until the fixes are available upstream.
 

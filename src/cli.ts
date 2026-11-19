@@ -1,22 +1,78 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 
+import { UnsupportedLogin } from "./adapter.ts";
 import { serve } from "./client.ts";
 import { credentialStore, loadConfig, portNumber, saveConfig } from "./config.ts";
+import type { Config } from "./config.ts";
 import { AuthenticationError, Controller, serverOrigin } from "./controller.ts";
-import { login } from "./login.ts";
+import { showImage } from "./image.ts";
+import { WrongPassword, login, pastedLogin } from "./login.ts";
+import type { SignIn } from "./login.ts";
 import { nc } from "./nc.ts";
-import { askSecret } from "./prompt.ts";
+import { ask, askPaste, askSecret } from "./prompt.ts";
 
 const USAGE = `Usage:
-  openenlink login [https://vpn.example.edu] [--remember] [--insecure-storage]
-                   [--browser path] [--user-agent text]
+  openenlink login [https://vpn.example.edu] [--user name] [--remember] [--insecure-storage]
+                   [--user-agent text]
   openenlink serve [--port 1088] [--proxy-user name]
   openenlink nc host port [--port 1088]
   openenlink status
   openenlink logout`;
 
+const PASSWORD_ATTEMPTS = 3;
+
 class UsageError extends Error {}
+
+// Signs in on the school's page from the terminal; a school without a terminal sign-in, or an
+// empty username or captcha, moves the sign-in to a browser.
+async function signIn(entry: URL, config: Config, user?: string): Promise<SignIn> {
+  let username = user ?? config.user;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await login(entry, {
+        ...(config.userAgent ? { userAgent: config.userAgent } : {}),
+        account: async (origin) => {
+          console.log(`Signing in at ${origin}`);
+          if (user === undefined || attempt > 1) {
+            const typed = await ask(
+              username ? `Username [${username}]: ` : "Username (empty to use a browser): ",
+            );
+            username = typed || username;
+          }
+          if (!username) return;
+          return { username, password: await askSecret("Password: ") };
+        },
+        captcha: async (image) => {
+          const cleanup = await showImage(image);
+          try {
+            return await ask("Captcha (empty to use a browser): ");
+          } finally {
+            await cleanup();
+          }
+        },
+      });
+    } catch (error) {
+      if (error instanceof WrongPassword && attempt < PASSWORD_ATTEMPTS) {
+        console.error(error.message);
+        continue;
+      }
+      if (!(error instanceof UnsupportedLogin)) throw error;
+      if (error.message) console.error(error.message);
+      return { credentials: await browserSignIn(entry, config.userAgent), cookies: [] };
+    }
+  }
+}
+
+async function browserSignIn(entry: URL, userAgent?: string) {
+  console.log(`Sign in with a browser at ${entry.href}`);
+  console.log(`Then paste the address the browser ends on, or the value of the access_token
+cookie of ${entry.host}:
+  Chrome, Edge: Developer tools, Application, Cookies
+  Firefox: Developer tools, Storage, Cookies
+  Safari: Develop, Show Web Inspector, Storage, Cookies`);
+  return pastedLogin(await askPaste("Paste (hidden): "), entry, userAgent);
+}
 
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
@@ -27,9 +83,9 @@ async function main(): Promise<void> {
       allowPositionals: true,
       args,
       options: {
-        browser: { type: "string" },
         "insecure-storage": { type: "boolean" },
         remember: { type: "boolean" },
+        user: { type: "string" },
         "user-agent": { type: "string" },
       },
     });
@@ -37,34 +93,32 @@ async function main(): Promise<void> {
     const previous = await loadConfig();
     const server = positionals[0] ?? previous?.server;
     if (!server) throw new UsageError("login needs the gateway address");
-    const config = {
-      browser: values.browser ?? previous?.browser,
-      server: serverOrigin(server),
-      userAgent: (values["user-agent"] ?? previous?.userAgent) || undefined,
-      insecureStorage: values["insecure-storage"] || undefined,
+    const origin = serverOrigin(server);
+    const config: Config = {
+      server: origin,
+      ...(previous?.server === origin && previous.user ? { user: previous.user } : {}),
+      ...((values["user-agent"] ?? previous?.userAgent) ?
+        { userAgent: values["user-agent"] ?? previous?.userAgent }
+      : {}),
+      ...(values["insecure-storage"] ? { insecureStorage: true } : {}),
     };
     const store = credentialStore(config);
     const where = store.file ?? "the OS credential store";
     const controller = new Controller(config.server, { userAgent: config.userAgent });
     try {
-      const url = await controller.loginUrl();
-      console.log("Sign in on the school page.");
+      const entry = await controller.loginUrl();
       if (values.remember)
         console.log(`The school username and password will be kept in ${where}.`);
-      const { rememberedPassword, ...credentials } = await login(url, config.browser, {
-        remember: values.remember,
-      });
+      const { account, cookies, credentials } = await signIn(entry, config, values.user);
       await store.save(credentials);
-      if (rememberedPassword) await store.savePassword(rememberedPassword);
+      if (values.remember && account) await store.savePassword({ ...account, cookies });
       else await store.clearPassword();
-      await saveConfig(config);
+      await saveConfig({ ...config, ...(account ? { user: account.username } : {}) });
       if (previous && Boolean(previous.insecureStorage) !== Boolean(config.insecureStorage))
         await credentialStore(previous).clear();
-      await controller.user(credentials.accessToken);
-      if (values.remember && !rememberedPassword)
-        console.log(
-          "Authorization saved; the school did not use a supported username/password form.",
-        );
+      console.log(`Signed in as ${await controller.user(credentials.accessToken)}`);
+      if (values.remember && !account)
+        console.log("A browser sign-in leaves no password to remember for serve.");
       console.log(`Authorization saved in ${where}. Run openenlink serve to connect.`);
     } finally {
       await controller.close();

@@ -3,11 +3,12 @@ import { getAsset, isSea } from "node:sea";
 import { setTimeout } from "node:timers/promises";
 import { Worker } from "node:worker_threads";
 
+import { UnsupportedLogin } from "./adapter.ts";
 import { credentialStore } from "./config.ts";
 import type { Config } from "./config.ts";
 import { AuthenticationError, Controller, PolicyError, tunnelRules } from "./controller.ts";
-import type { CredentialStore, Credentials } from "./credentials.ts";
-import { login } from "./login.ts";
+import type { CredentialStore, Credentials, RememberedPassword } from "./credentials.ts";
+import { WrongPassword, login } from "./login.ts";
 import type { ProxyAuth } from "./proxy.ts";
 import type { Gateway } from "./tunnel.ts";
 import type { TunnelOptions } from "./worker.ts";
@@ -32,7 +33,7 @@ export async function serve(
           controller,
           credentials,
           store,
-          config.browser,
+          config.userAgent,
         );
         const gateway = gateways[gatewayIndex++ % gateways.length];
         await runWorker({ gateway, ...listener, token, user }, signal);
@@ -58,7 +59,7 @@ async function session(
   controller: Controller,
   credentials: Credentials,
   store: CredentialStore,
-  browser?: string,
+  userAgent?: string,
 ): Promise<{ user: string; token: string; gateways: Gateway[] }> {
   try {
     const user = await controller.user(credentials.accessToken);
@@ -76,17 +77,55 @@ async function session(
     if (!renewed) {
       const password = await store.loadPassword();
       if (!password) throw error;
-      if (Date.now() - (password.lastAttemptAt ?? 0) < 5 * 60 * 1000)
-        throw new AuthenticationError(
-          "Automatic sign-in will retry after five minutes; login --remember can continue now",
-        );
-      await store.savePassword({ ...password, lastAttemptAt: Date.now() });
       console.log("Campus session ended; signing in on the school site");
-      renewed = await login(await controller.loginUrl(), browser, { password });
+      renewed = await renew(await controller.loginUrl(), password, store, userAgent);
     }
     await store.save(renewed);
     const user = await controller.user(renewed.accessToken);
     return { ...tunnelRules(await controller.rules(renewed.accessToken)), user };
+  }
+}
+
+// Signs in again with the school's session cookies, or with the remembered password at most
+// once every five minutes, so a changed password cannot lock the account.
+async function renew(
+  entry: URL,
+  password: RememberedPassword,
+  store: CredentialStore,
+  userAgent?: string,
+): Promise<Credentials> {
+  try {
+    const { cookies, credentials } = await login(entry, {
+      ...(password.cookies ? { cookies: password.cookies } : {}),
+      ...(userAgent ? { userAgent } : {}),
+      account: async (origin) => {
+        if (origin !== password.origin)
+          throw new AuthenticationError(
+            "School sign-in moved to another site; run openenlink login --remember",
+          );
+        if (Date.now() - (password.lastAttemptAt ?? 0) < 5 * 60 * 1000)
+          throw new AuthenticationError(
+            "Automatic sign-in will retry after five minutes; login --remember can continue now",
+          );
+        await store.savePassword({ ...password, lastAttemptAt: Date.now() });
+        return password;
+      },
+    });
+    const { lastAttemptAt: _, ...kept } = password;
+    await store.savePassword({ ...kept, ...(cookies.length ? { cookies } : {}) });
+    return credentials;
+  } catch (error) {
+    if (error instanceof WrongPassword) {
+      await store.clearPassword();
+      throw new AuthenticationError(
+        `${error.message}; the remembered password was removed, run openenlink login --remember`,
+      );
+    }
+    if (error instanceof UnsupportedLogin)
+      throw new AuthenticationError(
+        `${error.message || "School sign-in needs a browser"}; run openenlink login`,
+      );
+    throw error;
   }
 }
 

@@ -17,6 +17,7 @@ await test("Keep credentials for each origin in a private file", async (t) => {
     username: "student",
     password: "secret",
     lastAttemptAt: 1,
+    cookies: [{ name: "CASTGC", value: "TGT-1", host: "sso.one.edu", path: "/cas/", expires: 2 }],
   };
 
   assert.equal(await first.load(), undefined);

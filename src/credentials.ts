@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import { AsyncEntry } from "@napi-rs/keyring";
 
 import { text } from "./controller.ts";
+import type { Cookie } from "./web.ts";
 
 export type Credentials = { accessToken: string; refreshToken?: string };
 export type RememberedPassword = {
@@ -11,6 +12,8 @@ export type RememberedPassword = {
   username: string;
   password: string;
   lastAttemptAt?: number;
+  // The school's session cookies, tried before the password.
+  cookies?: Cookie[];
 };
 
 type Secret = "authorization" | "password";
@@ -62,6 +65,7 @@ export class CredentialStore {
       username: text(value.username, "saved username"),
       password: text(value.password, "saved password"),
       ...(typeof value.lastAttemptAt === "number" ? { lastAttemptAt: value.lastAttemptAt } : {}),
+      ...(value.cookies === undefined ? {} : { cookies: cookies(value.cookies) }),
     };
   }
 
@@ -131,6 +135,20 @@ function parse(value: string): Record<string, unknown> {
 function saved(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(DAMAGED);
   return value as Record<string, unknown>;
+}
+
+function cookies(value: unknown): Cookie[] {
+  if (!Array.isArray(value)) throw new Error(DAMAGED);
+  return value.map((entry: unknown) => {
+    const cookie = saved(entry);
+    return {
+      name: text(cookie.name, "saved cookie name"),
+      value: text(cookie.value, "saved cookie value"),
+      host: text(cookie.host, "saved cookie host"),
+      path: text(cookie.path, "saved cookie path"),
+      ...(typeof cookie.expires === "number" ? { expires: cookie.expires } : {}),
+    };
+  });
 }
 
 function without(record: Record<string, unknown>, key: string): Record<string, unknown> {

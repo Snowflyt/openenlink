@@ -1,243 +1,362 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { createServer } from "node:http";
-import { createServer as createHttpsServer } from "node:https";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { createServer } from "node:https";
 import { test } from "node:test";
 
-import { launch } from "puppeteer-core";
 import { generate } from "selfsigned";
+import { Agent, setGlobalDispatcher } from "undici";
 
+import { UnsupportedLogin } from "../src/adapter.ts";
 import { serve } from "../src/client.ts";
 import { AuthenticationError, Controller, PolicyError } from "../src/controller.ts";
 import { CredentialStore } from "../src/credentials.ts";
 import type { Credentials, RememberedPassword } from "../src/credentials.ts";
-import { browserPath, captureAuthorization, fillPassword } from "../src/login.ts";
+import { WrongPassword, login, pastedLogin } from "../src/login.ts";
+import type { LoginOptions } from "../src/login.ts";
 
-await test(
-  "Capture SSO callbacks before their scripts can launch an application",
-  { timeout: 20_000 },
-  async (t) => {
-    let unexpected = 0;
-    let queryPage = 0;
-    const token = Buffer.from("test-access-token").toString("base64");
-    const server = createServer((request, response) => {
-      const path = new URL(request.url!, "http://localhost").pathname;
-      if (path === "/query") {
-        response.writeHead(302, {
-          Location:
-            "/complete?accessToken=" + encodeURIComponent(token) + "&refreshToken=test-refresh",
-        });
-        response.end();
-      } else if (path === "/cookie") {
-        response.writeHead(200, {
-          "Content-Type": "text/html",
-          "Set-Cookie": `access_token=${token}; Path=/; HttpOnly`,
-        });
-        response.end("<script>fetch('/unexpected')</script>");
-      } else {
-        if (path === "/unexpected") unexpected++;
-        if (path === "/complete") queryPage++;
-        response.writeHead(200, { "Content-Type": "text/html" });
-        response.end("<script>fetch('/unexpected')</script>");
-      }
-    });
-    server.listen(0, "127.0.0.1");
-    await once(server, "listening");
-    const address = server.address();
-    assert(address && typeof address === "object");
-    const browser = await launch({ executablePath: await browserPath(), headless: true });
-    t.after(() => browser.close());
-    try {
-      for (const path of ["/query", "/cookie"]) {
-        const page = await browser.newPage();
-        const credentials = await captureAuthorization(
-          page,
-          new URL(`http://127.0.0.1:${address.port}${path}`),
-        );
-        assert.equal(credentials.accessToken, "test-access-token");
-        assert.equal(credentials.refreshToken, path === "/query" ? "test-refresh" : undefined);
-        await page.waitForFunction(() =>
-          document.body.textContent.includes("Authorization received"),
-        );
-        await page.close();
-      }
-      assert.equal(queryPage, 0);
-      assert.equal(unexpected, 0);
-    } finally {
-      await browser.close();
-      server.closeAllConnections();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    }
-  },
-);
+// One server plays the campus gateway at 127.0.0.1 and the school's CAS at localhost, so the
+// two keep separate cookies.
+const school = {
+  password: "right-password",
+  form: "normal" as "normal" | "changed",
+  captcha: false,
+  rejectCodes: false,
+  sessions: new Set<string>(),
+  tickets: new Set<string>(),
+  codes: new Set<string>(),
+  posts: [] as { body: URLSearchParams; referer: string | undefined }[],
+  unexpected: 0,
+};
+let issued = 0;
+const issue = (set: Set<string>) => {
+  const value = `value-${String(++issued)}`;
+  set.add(value);
+  return value;
+};
+const base64 = (text: string) => Buffer.from(text).toString("base64");
+const CAPTCHA = Buffer.from("captcha image");
 
-await test(
-  "Remember CAS credentials across origins and refuse to fill them on another origin",
-  { timeout: 30_000 },
-  async () => {
-    const certificate = await generate([{ name: "commonName", value: "localhost" }], {
-      keySize: 2048,
-    });
-    let port = 0;
-    const server = createHttpsServer(
-      { key: certificate.private, cert: certificate.cert },
-      (request, response) => {
-        if (request.url === "/start") {
-          response.writeHead(302, { Location: `https://school.test:${port}/login` });
-          response.end();
-        } else if (request.url === "/submit") {
-          response.writeHead(302, {
-            Location:
-              `https://portal.test:${port}/complete?accessToken=` +
-              Buffer.from("remembered-access").toString("base64"),
-          });
-          response.end();
-        } else {
-          response.writeHead(200, { "Content-Type": "text/html" });
-          response.end(
-            '<form method="post" action="/submit"><input id="username" name="username"><input id="password" name="password" type="password"><input id="login-submit" type="submit"></form>',
-          );
-        }
-      },
-    );
-    server.listen(0, "127.0.0.1");
-    await once(server, "listening");
-    const address = server.address();
-    assert(address && typeof address === "object");
-    port = address.port;
-    const url = new URL(`https://portal.test:${port}/start`);
-    const browser = await launch({
-      executablePath: await browserPath(),
-      headless: true,
-      acceptInsecureCerts: true,
-      args: [
-        "--no-proxy-server",
-        "--host-resolver-rules=MAP portal.test 127.0.0.1, MAP school.test 127.0.0.1",
+const certificate = await generate([{ name: "commonName", value: "localhost" }], {
+  extensions: [
+    {
+      altNames: [
+        { type: 2, value: "localhost" },
+        { ip: "127.0.0.1", type: 7 },
       ],
-    });
-    try {
-      const page = await browser.newPage();
-      const password: RememberedPassword = {
-        origin: `https://school.test:${port}`,
-        username: "student",
-        password: "test-password",
-      };
-      const capture = captureAuthorization(page, url, true);
-      await page.waitForSelector("#password");
-      assert.equal(
-        await page.evaluate(
-          () => typeof (window as unknown as { openenlinkPassword?: unknown }).openenlinkPassword,
-        ),
-        "undefined",
-      );
-      await fillPassword(page, password);
-      const captured = await capture;
-      assert.equal(captured.accessToken, "remembered-access");
-      assert.equal(captured.rememberedPassword?.username, password.username);
-      assert.equal(captured.rememberedPassword.password, password.password);
-      assert.equal(captured.rememberedPassword.origin, password.origin);
-      await page.close();
-
-      const foreign = await browser.newPage();
-      await foreign.goto(password.origin + "/login");
-      await assert.rejects(
-        fillPassword(foreign, { ...password, origin: "https://outside.example.test" }),
-        AuthenticationError,
-      );
-      assert.deepEqual(
-        await foreign.$$eval("#username, #password", (inputs) =>
-          inputs.map((input) => (input as HTMLInputElement).value),
-        ),
-        ["", ""],
-      );
-    } finally {
-      await browser.close();
-      server.closeAllConnections();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    }
+      name: "subjectAltName",
+    },
+  ],
+});
+setGlobalDispatcher(new Agent({ connect: { ca: certificate.cert } }));
+const server = createServer(
+  { key: certificate.private, cert: certificate.cert },
+  (request, response) => {
+    void handle(request, response);
   },
 );
+server.listen(0, "127.0.0.1");
+await once(server, "listening");
+const address = server.address();
+if (!address || typeof address === "string") throw new Error("The test server has no port");
+const gateway = `https://127.0.0.1:${String(address.port)}`;
+const idp = `https://localhost:${String(address.port)}`;
+const entry = new URL(`${gateway}/sso`);
+const token = base64("campus-token");
 
-await test(
-  "Reauthorize an expired session with remembered credentials",
-  { timeout: 25_000 },
-  async (t) => {
-    let submitted = 0;
-    const server = createServer((request, response) => {
-      if (request.url === "/submit") {
-        submitted++;
-        response.writeHead(302, {
-          Location: "/complete?accessToken=" + Buffer.from("renewed-access").toString("base64"),
-        });
-        response.end();
-      } else {
-        response.writeHead(200, { "Content-Type": "text/html" });
-        response.end(
-          '<form method="post" action="/submit"><input id="username"><input id="password" type="password"><input id="login-submit" type="submit"></form>',
-        );
-      }
+function page(code = "", message = "") {
+  return `<form id="login-form"></form>
+<input class="for-form" type="hidden" name="lt" value="LT-1">
+<input class="for-form" type="hidden" name="pid" value="pid-1">
+<input class="for-form" type="hidden" id="login-type" name="source" value="cas">
+<input class="for-form" type="hidden" name="execution" value="e1s1">
+<input type="hidden" name="_eventId" value="submit">
+<input id="x_random" type="hidden" value="">
+${school.form === "changed" ? '<input type="hidden" name="device" value="1">' : ""}
+<span id="errorcode" value="${code}"></span><span id="errormes" value="${message}"></span>`;
+}
+
+async function handle(request: IncomingMessage, response: ServerResponse) {
+  const url = new URL(request.url ?? "/", `https://${request.headers.host ?? ""}`);
+  const cookies = new Map(
+    (request.headers.cookie ?? "")
+      .split("; ")
+      .filter(Boolean)
+      .map((pair) => [pair.slice(0, pair.indexOf("=")), pair.slice(pair.indexOf("=") + 1)]),
+  );
+  const redirect = (location: string, cookie?: string) => {
+    response.writeHead(302, { Location: location, ...(cookie ? { "Set-Cookie": cookie } : {}) });
+    response.end();
+  };
+  const html = (status: number, body: string) => {
+    response.writeHead(status, {
+      "Content-Type": "text/html",
+      ...(school.captcha ? { "Set-Cookie": "SSO_X_CAPTCHA=1; Path=/" } : {}),
     });
-    server.listen(0, "127.0.0.1");
-    await once(server, "listening");
-    const address = server.address();
-    assert(address && typeof address === "object");
-    const url = new URL(`http://127.0.0.1:${address.port}/login`);
-    let remembered: RememberedPassword = {
-      origin: url.origin,
-      username: "student",
-      password: "test-password",
-    };
-    const saved: Credentials[] = [];
-    let refreshToken: string | undefined;
-    t.mock.method(CredentialStore.prototype, "load", () =>
-      Promise.resolve({
-        accessToken: "expired",
-        ...(refreshToken ? { refreshToken } : {}),
-      }),
-    );
-    t.mock.method(CredentialStore.prototype, "loadPassword", () => Promise.resolve(remembered));
-    t.mock.method(CredentialStore.prototype, "savePassword", (value: RememberedPassword) => {
-      remembered = value;
-      return Promise.resolve();
-    });
-    t.mock.method(CredentialStore.prototype, "save", (value: Credentials) => {
-      saved.push(value);
-      return Promise.resolve();
-    });
-    t.mock.method(Controller.prototype, "loginUrl", () => Promise.resolve(url));
-    t.mock.method(Controller.prototype, "refresh", () =>
-      Promise.reject(new AuthenticationError("Refresh expired")),
-    );
-    t.mock.method(Controller.prototype, "user", (token: string) => {
-      if (token === "expired") return Promise.reject(new AuthenticationError("Expired"));
-      return Promise.resolve("student");
-    });
-    t.mock.method(Controller.prototype, "rules", () => {
-      return Promise.reject(new PolicyError("Mock authorization complete"));
-    });
-    try {
-      await assert.rejects(
-        serve({ server: "https://vpn.example.test" }, { port: 1088 }, new AbortController().signal),
-        /Mock authorization complete/,
+    response.end(body);
+  };
+
+  if (url.hostname === "127.0.0.1") {
+    if (url.pathname === "/sso") return redirect(`${idp}/sso/oauth2/authorize?state=ENLINK_OIDC`);
+    const code = url.searchParams.get("code");
+    if (
+      url.pathname === "/oidc/callback" &&
+      code &&
+      !school.rejectCodes &&
+      school.codes.delete(code)
+    )
+      return redirect(
+        `/enclient/#/login/wxLoginLoading?accessToken=${token}`,
+        `access_token=${encodeURIComponent(token)}; Path=/`,
       );
-      assert.deepEqual(saved, [{ accessToken: "renewed-access" }]);
-      assert.equal(submitted, 1);
-      await assert.rejects(
-        serve({ server: "https://vpn.example.test" }, { port: 1088 }, new AbortController().signal),
-        /retry after five minutes/,
+    if (url.pathname === "/oidc/callback")
+      return redirect(
+        `/enclient/#/login/wxLoginLoading?state=${base64(JSON.stringify({ code: "400", message: "未查找到用户信息" }))}`,
       );
-      assert.equal(submitted, 1);
-      remembered = { ...remembered, lastAttemptAt: 0 };
-      refreshToken = "rejected-refresh";
-      await assert.rejects(
-        serve({ server: "https://vpn.example.test" }, { port: 1088 }, new AbortController().signal),
-        /Mock authorization complete/,
+  } else if (url.pathname === "/sso/oauth2/authorize") {
+    if (school.sessions.has(cookies.get("LOGIN_TOKEN") ?? ""))
+      return redirect(`${gateway}/oidc/callback?code=${issue(school.codes)}&state=ENLINK_OIDC`);
+    return redirect("/sso/login");
+  } else if (url.pathname === "/sso/login") {
+    const ticket = url.searchParams.get("ticket");
+    if (ticket && school.tickets.delete(ticket))
+      return redirect(
+        "/sso/oauth2/authorize",
+        `LOGIN_TOKEN=${issue(school.sessions)}; Path=/sso; HttpOnly`,
       );
-      assert.equal(submitted, 2);
-      assert.deepEqual(saved[1], { accessToken: "renewed-access" });
-    } finally {
-      server.closeAllConnections();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    }
-  },
-);
+    return redirect(`/cas/login?service=${encodeURIComponent(new URL("/sso/login", idp).href)}`);
+  } else if (url.pathname === "/cas/login" && request.method === "GET") {
+    if (school.sessions.has(cookies.get("CASTGC") ?? ""))
+      return redirect(`/sso/login?ticket=${issue(school.tickets)}`);
+    return html(200, page());
+  } else if (url.pathname === "/cas/login" && request.method === "POST") {
+    let text = "";
+    for await (const chunk of request) text += String(chunk);
+    const body = new URLSearchParams(text);
+    school.posts.push({ body, referer: request.headers.referer });
+    if (school.captcha && (body.get("captcha") !== "right" || body.get("token") !== "captcha"))
+      return html(401, page("INVALID_CAPTCHA", "验证码错误"));
+    if (body.get("password") !== school.password)
+      return html(401, page("INVALID_PASSWORD", "用户名或密码错误"));
+    response.writeHead(302, {
+      Location: `/sso/login?ticket=${issue(school.tickets)}`,
+      "Set-Cookie": `CASTGC=${issue(school.sessions)}; Path=/cas/; Secure; HttpOnly`,
+    });
+    return response.end();
+  } else if (url.pathname === "/sso/apis/v2/open/captcha") {
+    response.writeHead(200, { "Content-Type": "application/json" });
+    return response.end(JSON.stringify({ img: CAPTCHA.toString("base64"), token: "captcha" }));
+  }
+  school.unexpected++;
+  response.writeHead(404);
+  response.end();
+}
+
+function reset() {
+  Object.assign(school, {
+    password: "right-password",
+    form: "normal",
+    captcha: false,
+    rejectCodes: false,
+    posts: [],
+    unexpected: 0,
+  });
+  school.sessions.clear();
+}
+
+const typed =
+  (origins: string[]): LoginOptions["account"] =>
+  (origin) => {
+    origins.push(origin);
+    return Promise.resolve({ username: "student", password: "right-password" });
+  };
+
+await test("Sign in on the school page from the terminal", async () => {
+  reset();
+  const origins: string[] = [];
+  const result = await login(entry, { account: typed(origins) });
+  assert.deepEqual(result.credentials, { accessToken: "campus-token" });
+  assert.deepEqual(origins, [idp]);
+  assert.deepEqual(result.account, {
+    origin: idp,
+    username: "student",
+    password: "right-password",
+  });
+  assert.deepEqual(result.cookies.map((cookie) => cookie.name).sort(), ["CASTGC", "LOGIN_TOKEN"]);
+  assert.equal(school.posts.length, 1);
+  const [post] = school.posts;
+  assert.deepEqual(Object.fromEntries(post.body), {
+    _eventId: "submit",
+    execution: "e1s1",
+    lt: "LT-1",
+    source: "cas",
+    username: "student",
+    password: "right-password",
+  });
+  assert.match(post.referer ?? "", /\/cas\/login\?service=/);
+  assert.equal(school.unexpected, 0);
+
+  const again = await login(entry, {
+    cookies: result.cookies,
+    account: () => Promise.reject(new Error("The password was asked for")),
+  });
+  assert.deepEqual(again.credentials, { accessToken: "campus-token" });
+  assert.equal(again.account, undefined);
+  assert.deepEqual(again.cookies.map((cookie) => cookie.name).sort(), ["CASTGC", "LOGIN_TOKEN"]);
+  assert.equal(school.posts.length, 1);
+});
+
+await test("Refuse a changed sign-in page before asking for the password", async () => {
+  reset();
+  school.form = "changed";
+  const origins: string[] = [];
+  await assert.rejects(login(entry, { account: typed(origins) }), UnsupportedLogin);
+  assert.deepEqual(origins, []);
+  assert.equal(school.posts.length, 0);
+});
+
+await test("Report a wrong password and a gateway refusal", async () => {
+  reset();
+  school.password = "changed-password";
+  await assert.rejects(login(entry, { account: typed([]) }), WrongPassword);
+  reset();
+  school.rejectCodes = true;
+  await assert.rejects(
+    login(entry, { account: typed([]) }),
+    /Campus sign-in failed: 未查找到用户信息/,
+  );
+});
+
+await test("Ask for the captcha again after a wrong answer", async () => {
+  reset();
+  school.captcha = true;
+  const images: Buffer[] = [];
+  const answers = ["wrong", "right"];
+  const result = await login(entry, {
+    account: typed([]),
+    captcha: (image) => {
+      images.push(image);
+      return Promise.resolve(answers.shift());
+    },
+  });
+  assert.deepEqual(result.credentials, { accessToken: "campus-token" });
+  assert.deepEqual(images, [CAPTCHA, CAPTCHA]);
+  assert.deepEqual(
+    school.posts.map(({ body }) => [body.get("captcha"), body.get("token")]),
+    [
+      ["wrong", "captcha"],
+      ["right", "captcha"],
+    ],
+  );
+
+  reset();
+  school.captcha = true;
+  const origins: string[] = [];
+  await assert.rejects(login(entry, { account: typed(origins) }), /asks for a captcha/);
+  assert.deepEqual(origins, []);
+  await assert.rejects(
+    login(entry, { account: typed([]), captcha: () => Promise.resolve("") }),
+    UnsupportedLogin,
+  );
+});
+
+await test("Read what a browser sign-in left behind", async () => {
+  reset();
+  const expected = { accessToken: "campus-token" };
+  assert.deepEqual(await pastedLogin(` ${token}\n`, entry), expected);
+  assert.deepEqual(await pastedLogin(`access_token=${encodeURIComponent(token)}`, entry), expected);
+  assert.deepEqual(
+    await pastedLogin(`${gateway}/enclient/#/login/wxLoginLoading?accessToken=${token}`, entry),
+    expected,
+  );
+  // Base64 keeps its "+" after the hash.
+  assert.deepEqual(
+    await pastedLogin(
+      `${gateway}/enclient/#/login/wxLoginLoading?accessToken=${base64("token>>>")}`,
+      entry,
+    ),
+    { accessToken: "token>>>" },
+  );
+  const code = issue(school.codes);
+  assert.deepEqual(
+    await pastedLogin(`${gateway}/oidc/callback?code=${code}&state=ENLINK_OIDC`, entry),
+    expected,
+  );
+  await assert.rejects(
+    pastedLogin(`${idp}/enclient/#/login/wxLoginLoading?accessToken=${token}`, entry),
+    /not on 127\.0\.0\.1/,
+  );
+  await assert.rejects(pastedLogin(`${gateway}/enclient/`, entry), /no sign-in result/);
+  await assert.rejects(pastedLogin("not a token", entry), /invalid access token encoding/);
+});
+
+await test("Renew an expired session with the school's cookies, then the password", async (t) => {
+  reset();
+  const { cookies } = await login(entry, { account: typed([]) });
+  let remembered: RememberedPassword | undefined = {
+    origin: idp,
+    username: "student",
+    password: "right-password",
+    cookies,
+  };
+  const saved: Credentials[] = [];
+  t.mock.method(CredentialStore.prototype, "load", () =>
+    Promise.resolve({ accessToken: "expired" }),
+  );
+  t.mock.method(CredentialStore.prototype, "loadPassword", () => Promise.resolve(remembered));
+  t.mock.method(CredentialStore.prototype, "savePassword", (value: RememberedPassword) => {
+    remembered = value;
+    return Promise.resolve();
+  });
+  t.mock.method(CredentialStore.prototype, "clearPassword", () => {
+    remembered = undefined;
+    return Promise.resolve();
+  });
+  t.mock.method(CredentialStore.prototype, "save", (value: Credentials) => {
+    saved.push(value);
+    return Promise.resolve();
+  });
+  t.mock.method(Controller.prototype, "loginUrl", () => Promise.resolve(entry));
+  t.mock.method(Controller.prototype, "user", (accessToken: string) =>
+    accessToken === "expired" ?
+      Promise.reject(new AuthenticationError("Expired"))
+    : Promise.resolve("student"),
+  );
+  t.mock.method(Controller.prototype, "rules", () =>
+    Promise.reject(new PolicyError("Mock authorization complete")),
+  );
+  const run = () =>
+    serve({ server: "https://vpn.example.test" }, { port: 1088 }, new AbortController().signal);
+
+  school.posts = [];
+  await assert.rejects(run(), /Mock authorization complete/);
+  assert.deepEqual(saved, [{ accessToken: "campus-token" }]);
+  assert.equal(school.posts.length, 0);
+
+  school.sessions.clear();
+  await assert.rejects(run(), /Mock authorization complete/);
+  assert.equal(school.posts.length, 1);
+  assert.equal(remembered.lastAttemptAt, undefined);
+  assert.deepEqual(remembered.cookies?.map((cookie) => cookie.name).sort(), [
+    "CASTGC",
+    "LOGIN_TOKEN",
+  ]);
+
+  school.sessions.clear();
+  remembered = { ...remembered, lastAttemptAt: Date.now() };
+  await assert.rejects(run(), /retry after five minutes/);
+  assert.equal(school.posts.length, 1);
+
+  remembered = { ...remembered, lastAttemptAt: 0 };
+  school.password = "changed-password";
+  await assert.rejects(run(), /the remembered password was removed/);
+  assert.equal(school.posts.length, 2);
+  assert.equal(remembered, undefined);
+
+  remembered = { origin: "https://elsewhere.test", username: "student", password: "x" };
+  await assert.rejects(run(), /moved to another site/);
+  assert.equal(school.posts.length, 2);
+});
+
+server.closeAllConnections();
+server.close();
