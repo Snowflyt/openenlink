@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - v*
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: latest
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: latest
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: latest
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+  build:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: darwin-arm64
+          - os: macos-15-intel
+            target: darwin-x64
+          - os: ubuntu-latest
+            target: linux-x64-gnu
+          - os: ubuntu-24.04-arm
+            target: linux-arm64-gnu
+          - os: ubuntu-latest
+            target: linux-x64-musl
+            alpine: true
+          - os: ubuntu-24.04-arm
+            target: linux-arm64-musl
+            alpine: true
+          - os: windows-latest
+            target: windows-x64
+            exe: .exe
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: latest
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        if: ${{ !matrix.alpine }}
+        run: npm run build
+
+      - name: Name the binary after its platform
+        if: ${{ !matrix.alpine }}
+        shell: bash
+        run: mv dist/openenlink${{ matrix.exe }} openenlink-${{ matrix.target }}${{ matrix.exe }}
+
+      - name: Run the binary
+        if: ${{ !matrix.alpine }}
+        run: ./openenlink-${{ matrix.target }}${{ matrix.exe }} --help
+
+      # wasi-sdk runs only on glibc, so the host builds tcpip.wasm and Alpine builds the rest.
+      - name: Build and run the binary on Alpine
+        if: ${{ matrix.alpine }}
+        run: docker run --rm --volume "$PWD:/work" --workdir /work node:alpine sh -c "npm ci --ignore-scripts && npm run build && mv dist/openenlink openenlink-${{ matrix.target }} && ./openenlink-${{ matrix.target }} --help"
+
+      - name: Upload the binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: openenlink-${{ matrix.target }}
+          path: openenlink-${{ matrix.target }}${{ matrix.exe }}
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [typecheck, lint, test, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download the binaries
+        uses: actions/download-artifact@v8
+        with:
+          path: binaries
+          merge-multiple: true
+
+      - name: Publish the release
+        run: gh release create "$GITHUB_REF_NAME" binaries/* --generate-notes --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}
