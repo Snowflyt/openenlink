@@ -1,5 +1,4 @@
 import { once } from "node:events";
-import { getAsset, isSea } from "node:sea";
 import type { ConnectionOptions, TLSSocket } from "node:tls";
 import { connect } from "node:tls";
 
@@ -63,7 +62,6 @@ export class Tunnel {
       if (gateway.dns) addresses.dns = gateway.dns;
       const stack = await createStack({
         initializeLoopback: false,
-        ...(isSea() && { wasm: getAsset("tcpip.wasm") }),
         // lwIP routes 127/8 locally. An alias keeps campus loopback DNS on the tunnel.
         nameServer: {
           ip: addresses.dns.startsWith("127.") ? DNS_ALIAS : addresses.dns,

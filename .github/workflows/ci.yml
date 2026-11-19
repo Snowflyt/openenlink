@@ -76,8 +76,6 @@ jobs:
         include:
           - os: macos-latest
             target: darwin-arm64
-          - os: macos-15-intel
-            target: darwin-x64
           - os: ubuntu-latest
             target: linux-x64-gnu
           - os: ubuntu-24.04-arm
@@ -122,7 +120,7 @@ jobs:
       # wasi-sdk runs only on glibc, so the host builds tcpip.wasm and Alpine builds the rest.
       - name: Build and run the binary on Alpine
         if: ${{ matrix.alpine }}
-        run: docker run --rm --volume "$PWD:/work" --workdir /work node:alpine sh -c "npm ci --ignore-scripts && npm run build && mv dist/openenlink openenlink-${{ matrix.target }} && ./openenlink-${{ matrix.target }} --help"
+        run: docker run --rm --volume "$PWD:/work" --workdir /work node:27.0.0-alpha.0.1.1-alpine3.24 sh -c "npm ci --ignore-scripts && npm run build && mv dist/openenlink openenlink-${{ matrix.target }} && ./openenlink-${{ matrix.target }} --help"
 
       - name: Upload the binary
         uses: actions/upload-artifact@v7

@@ -248,57 +248,6 @@ index 52e8a78..cf23094 100644
            this.exports.send_tun_interface(handle, packetPtr, packet.length);
          },
          getIPv4Address: () => {
-diff --git a/packages/tcpip/src/stack.ts b/packages/tcpip/src/stack.ts
-index 835b060..723e0aa 100644
---- a/packages/tcpip/src/stack.ts
-+++ b/packages/tcpip/src/stack.ts
-@@ -40,6 +40,13 @@ export type NetworkStackOptions = {
-    * @default { ip: '127.0.0.1', port: 53 }
-    */
-   nameServer?: NameServer;
-+
-+  /**
-+   * The compiled lwIP module.
-+   *
-+   * @default the tcpip.wasm file shipped with this package
-+   */
-+  wasm?: BufferSource;
- };
- 
- export class VirtualNetworkStack implements NetworkStack {
-@@ -165,13 +172,8 @@ export class VirtualNetworkStack implements NetworkStack {
-       ]
-     );
- 
--    const source = fetchFile(
--      new URL('../tcpip.wasm', import.meta.url),
--      'application/wasm'
--    );
--
-     // Instantiate with both WASI and custom imports
--    const { instance } = await WebAssembly.instantiateStreaming(source, {
-+    const imports = {
-       wasi_snapshot_preview1: wasi.wasiImport,
-       env: {
-         ...this.#loopbackBindings.imports,
-@@ -182,7 +184,16 @@ export class VirtualNetworkStack implements NetworkStack {
-         ...this.#udpBindings.imports,
-         ...this.#icmpBindings.imports,
-       },
--    });
-+    };
-+    const { instance } = this.#options.wasm
-+      ? await WebAssembly.instantiate(this.#options.wasm, imports)
-+      : await WebAssembly.instantiateStreaming(
-+          fetchFile(
-+            new URL('../tcpip.wasm', import.meta.url),
-+            'application/wasm'
-+          ),
-+          imports
-+        );
- 
-     const wasmInstance = instance as WasmInstance;
- 
 diff --git a/packages/tcpip/src/util.ts b/packages/tcpip/src/util.ts
 index e44e7e1..e7c590e 100644
 --- a/packages/tcpip/src/util.ts
