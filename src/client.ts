@@ -7,13 +7,13 @@ import { AuthenticationError, Controller, PolicyError, tunnelRules } from "./con
 import { CredentialStore } from "./credentials.ts";
 import type { Credentials } from "./credentials.ts";
 import { login } from "./login.ts";
-import type { SocksAuth } from "./socks.ts";
+import type { ProxyAuth } from "./proxy.ts";
 import type { Gateway } from "./tunnel.ts";
 import type { TunnelOptions } from "./worker.ts";
 
 export async function serve(
   config: Config,
-  listener: { port: number; socks?: SocksAuth },
+  listener: { port: number; auth?: ProxyAuth },
   signal: AbortSignal,
 ): Promise<void> {
   const store = new CredentialStore(config.server);
@@ -97,7 +97,7 @@ async function runWorker(options: TunnelOptions, signal: AbortSignal): Promise<v
   };
   signal.addEventListener("abort", stop, { once: true });
   worker.once("message", () => {
-    console.log(`Campus SOCKS listening on 127.0.0.1:${options.port}`);
+    console.log(`Campus proxy listening on 127.0.0.1:${options.port}`);
   });
 
   try {

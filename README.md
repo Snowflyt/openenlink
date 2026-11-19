@@ -1,6 +1,6 @@
 # openenlink
 
-A TypeScript client for Enlink campus networks. It provides a local SOCKS5 proxy using a TLS tunnel and [lwIP compiled to WebAssembly](https://github.com/chipmk/tcpip.js).
+A TypeScript client for Enlink campus networks. It provides a local SOCKS5 and HTTP proxy using a TLS tunnel and [lwIP compiled to WebAssembly](https://github.com/chipmk/tcpip.js).
 
 Tested with Soochow University's OIDC login, campus websites and SSH. Servers requiring SPA are reported as unsupported.
 
@@ -18,13 +18,16 @@ Login opens an isolated Chrome window on the school's SSO page. Enter school cre
 
 Use `login --remember` to save a CAS username and password in the OS credential store. When a campus session ends, the client signs in again through the school page in a background browser. The saved password is filled only on its original HTTPS origin. A failed sign-in waits five minutes before another attempt; verification challenges can be completed with `login --remember`. `logout` removes both the authorization and remembered password.
 
-The proxy listens on `127.0.0.1:1088` while `serve` runs; `serve --port` chooses another port. It supports SOCKS5 CONNECT and UDP ASSOCIATE over IPv4. Destination DNS queries use the campus resolver inside the tunnel. Configure applications to resolve names through SOCKS, for example:
+The proxy listens on `127.0.0.1:1088` while `serve` runs; `serve --port` chooses another port. The port accepts SOCKS5 (CONNECT and UDP ASSOCIATE over IPv4) and HTTP proxy requests, including CONNECT. Destination DNS queries use the campus resolver inside the tunnel, so SOCKS clients should resolve names through the proxy. For example:
 
 ```sh
 curl --socks5-hostname 127.0.0.1:1088 https://its.suda.edu.cn/
+curl --proxy http://127.0.0.1:1088 https://its.suda.edu.cn/
 ```
 
-On a shared machine, other accounts can reach the same local port. `serve --socks-user name` reads a password from the terminal, or one line from standard input, and makes the proxy require SOCKS5 username/password authentication. Clients then connect with `socks5h://name:password@127.0.0.1:1088`.
+Tools that read `http_proxy` and `https_proxy`, such as git and pip, can use `http://127.0.0.1:1088`.
+
+On a shared machine, other accounts can reach the same local port. `serve --proxy-user name` reads a password from the terminal, or one line from standard input, and makes the proxy require it through SOCKS5 username/password or HTTP Basic proxy authentication. Clients then connect with `socks5h://name:password@127.0.0.1:1088` or `http://name:password@127.0.0.1:1088`.
 
 Controller requests carry Node.js's default User-Agent. `login --user-agent text` replaces it for gateways that filter clients, and `--user-agent ""` restores the default.
 
@@ -47,7 +50,7 @@ npm run typecheck
 npm run lint
 ```
 
-Tests cover a local TLS gateway, certificate rejection, SOCKS TCP/UDP, compressed and loopback DNS replies, connection half-close, TCP under packet loss and reordering, controller signing and SSO callback interception in Chromium. Browser tests require Chrome or Chromium. Each tunnel runs in a worker so disconnecting releases its WASM memory and timers.
+Tests cover a local TLS gateway, certificate rejection, SOCKS TCP/UDP, HTTP CONNECT and request forwarding, compressed and loopback DNS replies, connection half-close, TCP under packet loss and reordering, controller signing and SSO callback interception in Chromium. Browser tests require Chrome or Chromium. Each tunnel runs in a worker so disconnecting releases its WASM memory and timers.
 
 The install step patches `tcpip` 0.4.0 from `patches/tcpip`. The JavaScript fixes keep the write side open after a peer FIN and free packet buffers copied into WASM memory. The rebuilt WASM delivers every pbuf of out-of-order data, sends chained outgoing packets whole and copies incoming packets before lwIP queues them. Without these, one lost packet could stall or corrupt a connection. It also uses a 182 KiB window with window scaling instead of 5.6 KiB, and a 1 s initial retransmission timeout instead of 3 s. `patches/tcpip/build.sh` rebuilds `tcpip.wasm` from `lwip-glue.patch` with wasi-sdk 24. That dependency is pinned until the fixes are available upstream.
 

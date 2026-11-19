@@ -13,8 +13,8 @@ import { generate } from "selfsigned";
 import { createStack } from "tcpip";
 
 import { ByteReader, write } from "../src/protocol.ts";
-import { SocksServer } from "../src/socks.ts";
-import type { SocksAuth } from "../src/socks.ts";
+import { ProxyServer } from "../src/proxy.ts";
+import type { ProxyAuth } from "../src/proxy.ts";
 import { Tunnel } from "../src/tunnel.ts";
 
 if (isMainThread) {
@@ -22,11 +22,11 @@ if (isMainThread) {
     { dns: "10.88.0.1", compressed: false },
     { dns: "127.0.0.1", compressed: false },
     { dns: "10.88.0.1", compressed: true },
-    { dns: "10.88.0.1", compressed: false, socks: { username: "student", password: "proxy" } },
+    { dns: "10.88.0.1", compressed: false, auth: { username: "student", password: "proxy" } },
   ];
   for (const scenario of cases)
     await test(
-      `SOCKS TCP and UDP with DNS ${JSON.stringify(scenario)}`,
+      `Proxy TCP and UDP with DNS ${JSON.stringify(scenario)}`,
       { timeout: 20_000 },
       async (t) => {
         // A worker owns the WASM stack and its timer for the lifetime of this tunnel.
@@ -45,13 +45,13 @@ if (isMainThread) {
 
 async function exercise(): Promise<void> {
   const {
+    auth,
     compressed,
     dns: peerAddress,
-    socks: auth,
   } = workerData as {
     compressed: boolean;
     dns: `${number}.${number}.${number}.${number}`;
-    socks?: SocksAuth;
+    auth?: ProxyAuth;
   };
   const pems = await generate([{ name: "commonName", value: "gateway.test" }], {
     extensions: [
@@ -162,7 +162,7 @@ async function exercise(): Promise<void> {
   const gateway = { host: "127.0.0.1", port: address.port, serverName: "gateway.test" };
   await assert.rejects(Tunnel.connect(gateway, "student", "secret"));
   const tunnel = await Tunnel.connect(gateway, "student", "secret", { ca: pems.cert });
-  const socks = await SocksServer.listen(tunnel.stack, tunnel.dnsServer, 0, auth);
+  const proxy = await ProxyServer.listen(tunnel.stack, tunnel.dnsServer, 0, auth);
   void tunnel.done.catch(() => {});
 
   const credentials = (password: string) => {
@@ -187,13 +187,13 @@ async function exercise(): Promise<void> {
   };
 
   if (auth) {
-    const anonymous = connect(socks.port, "127.0.0.1");
+    const anonymous = connect(proxy.port, "127.0.0.1");
     const anonymousReader = new ByteReader(anonymous);
     await write(anonymous, Buffer.from([5, 1, 0]));
     assert.deepEqual(await anonymousReader.read(2), Buffer.from([5, 255]));
     anonymous.destroy();
 
-    const guess = connect(socks.port, "127.0.0.1");
+    const guess = connect(proxy.port, "127.0.0.1");
     const guessReader = new ByteReader(guess);
     await write(guess, Buffer.from([5, 1, 2]));
     assert.deepEqual(await guessReader.read(2), Buffer.from([5, 2]));
@@ -201,9 +201,15 @@ async function exercise(): Promise<void> {
     assert.deepEqual(await guessReader.read(2), Buffer.from([1, 1]));
     assert.equal(await guessReader.chunk(), undefined);
     guess.destroy();
+
+    const stranger = connect(proxy.port, "127.0.0.1");
+    const strangerReader = new ByteReader(stranger);
+    await write(stranger, Buffer.from("CONNECT campus.test:8080 HTTP/1.1\r\n\r\n"));
+    assert.match((await strangerReader.until("\r\n\r\n", 1024)).toString(), /^HTTP\/1\.1 407 /);
+    stranger.destroy();
   }
 
-  const tcp = connect(socks.port, "127.0.0.1");
+  const tcp = connect(proxy.port, "127.0.0.1");
   const reader = new ByteReader(tcp);
   await handshake(tcp, reader);
   const host = Buffer.from("campus.test");
@@ -218,7 +224,43 @@ async function exercise(): Promise<void> {
   tcp.end();
   assert.equal(await reader.chunk(), undefined);
 
-  const control = connect(socks.port, "127.0.0.1");
+  const basic = auth && Buffer.from(`${auth.username}:${auth.password}`).toString("base64");
+  const authorization = basic ? ["Proxy-Authorization: Basic " + basic] : [];
+  const tunneled = connect(proxy.port, "127.0.0.1");
+  const tunneledReader = new ByteReader(tunneled);
+  await write(
+    tunneled,
+    Buffer.from(["CONNECT campus.test:8080 HTTP/1.1", ...authorization, "", ""].join("\r\n")),
+  );
+  assert.equal(
+    (await tunneledReader.until("\r\n\r\n", 1024)).toString(),
+    "HTTP/1.1 200 Connection Established",
+  );
+  await write(tunneled, payload);
+  assert.deepEqual(await tunneledReader.read(payload.length), payload);
+  tunneled.end();
+  assert.equal(await tunneledReader.chunk(), undefined);
+
+  // The echo server returns the request exactly as the proxy forwarded it.
+  const forwarded = connect(proxy.port, "127.0.0.1");
+  const forwardedReader = new ByteReader(forwarded);
+  const request = [
+    "GET http://campus.test:8080/echo?x=1 HTTP/1.1",
+    "Host: campus.test:8080",
+    ...authorization,
+    "Proxy-Connection: keep-alive",
+    "",
+    "",
+  ];
+  await write(forwarded, Buffer.from(request.join("\r\n")));
+  assert.equal(
+    (await forwardedReader.until("\r\n\r\n", 1024)).toString(),
+    "GET /echo?x=1 HTTP/1.1\r\nHost: campus.test:8080\r\nConnection: close",
+  );
+  forwarded.end();
+  assert.equal(await forwardedReader.chunk(), undefined);
+
+  const control = connect(proxy.port, "127.0.0.1");
   const udpReader = new ByteReader(control);
   await handshake(control, udpReader);
   await write(control, Buffer.from([5, 3, 0, 1, 0, 0, 0, 0, 0, 0]));
@@ -237,7 +279,7 @@ async function exercise(): Promise<void> {
   assert.deepEqual(response, Buffer.from([0, 0, 0, 1, 10, 88, 0, 1, 31, 145, 97, 98, 99]));
   udp.close();
   control.destroy();
-  await socks.close();
+  await proxy.close();
   tunnel.close();
   parentPort!.postMessage({ dns: true, tcp: true, udp: true });
 }

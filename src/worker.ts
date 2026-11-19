@@ -1,7 +1,7 @@
 import { parentPort, workerData } from "node:worker_threads";
 
-import { SocksServer } from "./socks.ts";
-import type { SocksAuth } from "./socks.ts";
+import { ProxyServer } from "./proxy.ts";
+import type { ProxyAuth } from "./proxy.ts";
 import { Tunnel } from "./tunnel.ts";
 import type { Gateway } from "./tunnel.ts";
 
@@ -10,18 +10,18 @@ export type TunnelOptions = {
   user: string;
   token: string;
   port: number;
-  socks?: SocksAuth;
+  auth?: ProxyAuth;
 };
 
 const options = workerData as TunnelOptions;
 const tunnel = await Tunnel.connect(options.gateway, options.user, options.token);
 void tunnel.done.catch(() => {});
-const socks = await SocksServer.listen(tunnel.stack, tunnel.dnsServer, options.port, options.socks);
-parentPort!.postMessage({ port: socks.port });
+const proxy = await ProxyServer.listen(tunnel.stack, tunnel.dnsServer, options.port, options.auth);
+parentPort!.postMessage({ port: proxy.port });
 
 try {
   await tunnel.done;
 } finally {
-  await socks.close();
+  await proxy.close();
   tunnel.close();
 }

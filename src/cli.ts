@@ -10,7 +10,7 @@ import { askSecret } from "./prompt.ts";
 
 const USAGE = `Usage:
   openenlink login [https://vpn.example.edu] [--remember] [--browser path] [--user-agent text]
-  openenlink serve [--port 1088] [--socks-user name]
+  openenlink serve [--port 1088] [--proxy-user name]
   openenlink status
   openenlink logout`;
 
@@ -68,23 +68,23 @@ async function main(): Promise<void> {
   if (command === "serve") {
     const { values } = parseArgs({
       args,
-      options: { port: { type: "string" }, "socks-user": { type: "string" } },
+      options: { port: { type: "string" }, "proxy-user": { type: "string" } },
     });
     const port = portNumber(values.port ?? 1088);
     const config = await loadConfig();
     if (!config) throw new AuthenticationError("Run openenlink login first");
-    const username = values["socks-user"];
-    const socks =
+    const username = values["proxy-user"];
+    const auth =
       username === undefined ? undefined : (
-        { username, password: await askSecret("SOCKS password: ") }
+        { username, password: await askSecret("Proxy password: ") }
       );
-    if (socks && Object.values(socks).some((value) => !value || Buffer.byteLength(value) > 255))
-      throw new UsageError("SOCKS username and password must be 1 to 255 bytes");
+    if (auth && Object.values(auth).some((value) => !value || Buffer.byteLength(value) > 255))
+      throw new UsageError("Proxy username and password must be 1 to 255 bytes");
 
     const controller = new AbortController();
     process.once("SIGINT", () => controller.abort());
     process.once("SIGTERM", () => controller.abort());
-    await serve(config, { port, socks }, controller.signal).catch((error: unknown) => {
+    await serve(config, { port, auth }, controller.signal).catch((error: unknown) => {
       if (!controller.signal.aborted) throw error;
     });
     return;

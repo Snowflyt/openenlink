@@ -38,7 +38,7 @@ Subsequent gateway frames use an 8-byte header. Type 2 is control traffic; type 
 
 lwIP treats `127/8` as local. For a loopback campus resolver, the client uses an internal RFC 2544 alias and translates IPv4 addresses and checksums at the TLS boundary. Both resolver forms have end-to-end tests.
 
-The SOCKS resolver sends UDP queries through the virtual stack and decodes replies with `dns-packet`. The DNS decoder bundled with `tcpip` cannot handle the compressed names in the live gateway's replies. DNS answers can map campus hostnames to virtual `192.19.*` addresses, so substituting public DNS breaks those resources. Truncated DNS replies are reported; DNS over TCP and IPv6 transport are unimplemented.
+The proxy's resolver sends UDP queries through the virtual stack and decodes replies with `dns-packet`. The DNS decoder bundled with `tcpip` cannot handle the compressed names in the live gateway's replies. DNS answers can map campus hostnames to virtual `192.19.*` addresses, so substituting public DNS breaks those resources. Truncated DNS replies are reported; DNS over TCP and IPv6 transport are unimplemented.
 
 ## SPA
 
