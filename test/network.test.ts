@@ -227,6 +227,17 @@ async function exercise(): Promise<void> {
   tcp.end();
   assert.equal(await reader.chunk(), undefined);
 
+  // Nothing listens on port 8079, so the campus host resets the connection.
+  const refused = connect(proxy.port, "127.0.0.1");
+  const refusedReader = new ByteReader(refused);
+  await handshake(refused, refusedReader);
+  await write(
+    refused,
+    Buffer.concat([Buffer.from([5, 1, 0, 3, host.length]), host, Buffer.from([31, 143])]),
+  );
+  assert.equal((await refusedReader.read(10))[1], 1);
+  refused.destroy();
+
   const basic = auth && Buffer.from(`${auth.username}:${auth.password}`).toString("base64");
   const authorization = basic ? ["Proxy-Authorization: Basic " + basic] : [];
   const tunneled = connect(proxy.port, "127.0.0.1");

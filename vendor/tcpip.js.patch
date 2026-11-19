@@ -1,8 +1,75 @@
 diff --git a/packages/tcpip/src/bindings/tcp.ts b/packages/tcpip/src/bindings/tcp.ts
-index 6095c6a..c46308b 100644
+index 6095c6a..241f277 100644
 --- a/packages/tcpip/src/bindings/tcp.ts
 +++ b/packages/tcpip/src/bindings/tcp.ts
-@@ -153,7 +153,8 @@ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
+@@ -8,7 +8,7 @@ import type {
+   TcpListener,
+   TcpListenerOptions,
+ } from '../types.js';
+-import { EventMap, Hooks, nextMicrotask } from '../util.js';
++import { Hooks, nextMicrotask } from '../util.js';
+ import { Bindings } from './base.js';
+ import type { Pointer } from './types.js';
+ 
+@@ -32,6 +32,7 @@ type TcpConnectionOuterHooks = {
+ type TcpConnectionInnerHooks = {
+   receive(data: Uint8Array): Promise<void>;
+   close(): Promise<void>;
++  abort(error: Error): void;
+ };
+ 
+ const tcpListenerHooks = new Hooks<
+@@ -58,6 +59,7 @@ export type TcpImports = {
+   ): Promise<void>;
+   connected_tcp_connection(handle: TcpConnectionHandle): Promise<void>;
+   closed_tcp_connection(handle: TcpConnectionHandle): Promise<void>;
++  aborted_tcp_connection(handle: TcpConnectionHandle, error: number): void;
+   receive_tcp_chunk(
+     handle: TcpConnectionHandle,
+     chunkPtr: number,
+@@ -82,9 +84,12 @@ export type TcpExports = {
+ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
+   #tcpListeners = new Map<TcpListenerHandle, TcpListener>();
+   #tcpConnections = new Map<TcpConnectionHandle, TcpConnection>();
+-  #tcpConnectEvents = new EventMap<TcpConnectionHandle, TcpConnection>();
+-  #tcpAcks = new Map<TcpConnectionHandle, (length: number) => void>();
+-  #tcpCloseAcks = new Map<TcpConnectionHandle, () => void>();
++  #tcpConnects = new Map<
++    TcpConnectionHandle,
++    PromiseWithResolvers<TcpConnection>
++  >();
++  #tcpAcks = new Map<TcpConnectionHandle, PromiseWithResolvers<number>>();
++  #tcpCloseAcks = new Map<TcpConnectionHandle, PromiseWithResolvers<void>>();
+   #dnsClient: DnsClient;
+ 
+   async #resolveHost(host: string) {
+@@ -113,9 +118,9 @@ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
+         throw new Error(`failed to close tcp connection: ${result}`);
+       }
+ 
+-      await new Promise<void>((resolve) => {
+-        this.#tcpCloseAcks.set(handle, resolve);
+-      });
++      const closeAck = Promise.withResolvers<void>();
++      this.#tcpCloseAcks.set(handle, closeAck);
++      await closeAck.promise;
+     }
+   }
+ 
+@@ -131,9 +136,9 @@ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
+         throw new Error(`failed to shutdown tcp write side: ${result}`);
+       }
+ 
+-      await new Promise<void>((resolve) => {
+-        this.#tcpCloseAcks.set(handle, resolve);
+-      });
++      const closeAck = Promise.withResolvers<void>();
++      this.#tcpCloseAcks.set(handle, closeAck);
++      await closeAck.promise;
+     }
+   }
+ 
+@@ -153,7 +158,8 @@ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
  
        tcpConnectionHooks.setOuter(connection, {
          send: async (data) => {
@@ -12,7 +79,20 @@ index 6095c6a..c46308b 100644
  
            let bytesQueued = this.exports.send_tcp_chunk(
              connectionHandle,
-@@ -200,7 +201,8 @@ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
+@@ -164,9 +170,9 @@ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
+           // If the entire data was not queued, send the remaining
+           // chunks as space becomes available
+           while (bytesQueued < data.length) {
+-            await new Promise<number>((resolve) => {
+-              this.#tcpAcks.set(connectionHandle, resolve);
+-            });
++            const ack = Promise.withResolvers<number>();
++            this.#tcpAcks.set(connectionHandle, ack);
++            await ack.promise;
+             const bytesRemaining = data.length - bytesQueued;
+ 
+             bytesQueued += this.exports.send_tcp_chunk(
+@@ -200,7 +206,8 @@ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
  
        tcpConnectionHooks.setOuter(connection, {
          send: async (data) => {
@@ -22,7 +102,115 @@ index 6095c6a..c46308b 100644
  
            let bytesQueued = this.exports.send_tcp_chunk(
              handle,
-@@ -426,7 +428,6 @@ export class VirtualTcpConnection
+@@ -211,9 +218,9 @@ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
+           // If the entire data was not queued, send the remaining
+           // chunks as space becomes available
+           while (bytesQueued < data.length) {
+-            await new Promise<number>((resolve) => {
+-              this.#tcpAcks.set(handle, resolve);
+-            });
++            const ack = Promise.withResolvers<number>();
++            this.#tcpAcks.set(handle, ack);
++            await ack.promise;
+             const bytesRemaining = data.length - bytesQueued;
+ 
+             bytesQueued += this.exports.send_tcp_chunk(
+@@ -240,7 +247,8 @@ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
+       // The handle is registered first so early peer data is not dropped.
+       await nextMicrotask();
+ 
+-      this.#tcpConnectEvents.set(handle, connection);
++      this.#tcpConnects.get(handle)?.resolve(connection);
++      this.#tcpConnects.delete(handle);
+     },
+     closed_tcp_connection: async (handle: TcpConnectionHandle) => {
+       const connection = this.#tcpConnections.get(handle);
+@@ -252,6 +260,28 @@ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
+ 
+       await tcpConnectionHooks.getInner(connection).close();
+     },
++    aborted_tcp_connection: (handle: TcpConnectionHandle, error: number) => {
++      const reason = new Error(
++        error === LwipError.ERR_RST
++          ? 'tcp connection reset'
++          : 'tcp connection aborted'
++      );
++
++      const connect = this.#tcpConnects.get(handle);
++      this.#tcpConnects.delete(handle);
++      connect?.reject(reason);
++
++      this.#tcpAcks.get(handle)?.reject(reason);
++      this.#tcpAcks.delete(handle);
++      this.#tcpCloseAcks.get(handle)?.reject(reason);
++      this.#tcpCloseAcks.delete(handle);
++
++      const connection = this.#tcpConnections.get(handle);
++      this.#tcpConnections.delete(handle);
++      if (connection && !connect) {
++        tcpConnectionHooks.getInner(connection).abort(reason);
++      }
++    },
+     receive_tcp_chunk: async (
+       handle: TcpConnectionHandle,
+       chunkPtr: number,
+@@ -271,13 +301,13 @@ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
+       tcpConnectionHooks.getInner(connection).receive(new Uint8Array(chunk));
+     },
+     sent_tcp_chunk: (handle: TcpConnectionHandle, length: number) => {
+-      const notifyAck = this.#tcpAcks.get(handle);
++      const ack = this.#tcpAcks.get(handle);
+       this.#tcpAcks.delete(handle);
+-      notifyAck?.(length);
++      ack?.resolve(length);
+ 
+-      const notifyCloseAck = this.#tcpCloseAcks.get(handle);
++      const closeAck = this.#tcpCloseAcks.get(handle);
+       this.#tcpCloseAcks.delete(handle);
+-      notifyCloseAck?.();
++      closeAck?.resolve();
+     },
+   };
+ 
+@@ -302,13 +332,13 @@ export class TcpBindings extends Bindings<TcpImports, TcpExports> {
+ 
+     const handle = this.exports.create_tcp_connection(hostPtr, options.port);
+ 
+-    const tcpConnection = await this.#tcpConnectEvents.wait(handle);
+-
+-    if (!tcpConnection) {
++    if (!handle) {
+       throw new Error('tcp failed to connect');
+     }
+ 
+-    return tcpConnection;
++    const connected = Promise.withResolvers<TcpConnection>();
++    this.#tcpConnects.set(handle, connected);
++    return connected.promise;
+   }
+ }
+ 
+@@ -347,6 +377,7 @@ export class VirtualTcpConnection
+   #writableController?: WritableStreamDefaultController;
+   #remoteClosed = false;
+   #readableClosed = false;
++  #aborted = false;
+ 
+   readable: ReadableStream<Uint8Array>;
+   writable: WritableStream<Uint8Array>;
+@@ -364,6 +395,11 @@ export class VirtualTcpConnection
+         this.#remoteClosed = true;
+         this.#enqueueBuffer();
+       },
++      abort: (error: Error) => {
++        this.#aborted = true;
++        this.#errorReadable(error);
++        this.#writableController?.error(error);
++      },
+     });
+ 
+     this.readable = new ReadableStream(
+@@ -426,7 +462,6 @@ export class VirtualTcpConnection
    #enqueueBuffer() {
      if (this.#remoteClosed && this.#receiveBuffer.length === 0) {
        this.#closeReadable();
@@ -30,7 +218,7 @@ index 6095c6a..c46308b 100644
        return;
      }
  
-@@ -461,7 +462,6 @@ export class VirtualTcpConnection
+@@ -461,11 +496,15 @@ export class VirtualTcpConnection
  
      if (this.#remoteClosed && this.#receiveBuffer.length === 0) {
        this.#closeReadable();
@@ -38,6 +226,15 @@ index 6095c6a..c46308b 100644
      }
    }
  
+   async close() {
++    // lwIP has already freed an aborted connection and its streams carry the error
++    if (this.#aborted) {
++      return;
++    }
++
+     await tcpConnectionHooks.getOuter(this).close();
+     this.#errorReadable(new Error('tcp connection closed'));
+     this.#writableController?.error(new Error('tcp connection closed'));
 diff --git a/packages/tcpip/src/bindings/tun-interface.ts b/packages/tcpip/src/bindings/tun-interface.ts
 index 52e8a78..cf23094 100644
 --- a/packages/tcpip/src/bindings/tun-interface.ts
@@ -102,10 +299,18 @@ index f756c7f..feb2d01 100644
  #define MEMP_NUM_TCP_PCB 256                          // Number of simultaneously active TCP PCBs
  #define MEMP_NUM_TCP_PCB_LISTEN 256                   // Number of simultaneously active listening TCP PCBs
 diff --git a/packages/tcpip/wasm/tcp.c b/packages/tcpip/wasm/tcp.c
-index cd80c1b..d9a995d 100644
+index cd80c1b..3797f54 100644
 --- a/packages/tcpip/wasm/tcp.c
 +++ b/packages/tcpip/wasm/tcp.c
-@@ -18,7 +18,9 @@ void update_tcp_receive_buffer(struct tcp_pcb *conn, uint16_t length) {
+@@ -8,6 +8,7 @@
+ extern void accept_tcp_connection(struct tcp_pcb *listener, struct tcp_pcb *pcb);
+ extern void connected_tcp_connection(struct tcp_pcb *conn);
+ extern void closed_tcp_connection(struct tcp_pcb *conn);
++extern void aborted_tcp_connection(struct tcp_pcb *conn, err_t err);
+ extern void receive_tcp_chunk(struct tcp_pcb *conn, const uint8_t *chunk, uint16_t length);
+ extern void sent_tcp_chunk(struct tcp_pcb *conn, uint16_t length);
+ 
+@@ -18,7 +19,9 @@ void update_tcp_receive_buffer(struct tcp_pcb *conn, uint16_t length) {
  
  EXPORT("send_tcp_chunk")
  uint16_t send_tcp_chunk(struct tcp_pcb *conn, uint8_t *chunk, uint16_t length) {
@@ -116,7 +321,7 @@ index cd80c1b..d9a995d 100644
  
    if (available_space == 0) {
      return 0;
-@@ -58,7 +60,10 @@ err_t recv_tcp_callback(void *arg, struct tcp_pcb *conn, struct pbuf *p, err_t e
+@@ -58,7 +61,10 @@ err_t recv_tcp_callback(void *arg, struct tcp_pcb *conn, struct pbuf *p, err_t e
      return ERR_OK;
    }
  
@@ -128,6 +333,41 @@ index cd80c1b..d9a995d 100644
    pbuf_free(p);
  
    return ERR_OK;
+@@ -70,6 +76,12 @@ err_t sent_callback(void *arg, struct tcp_pcb *conn, uint16_t len) {
+   return ERR_OK;
+ }
+ 
++// Callback for when lwIP aborts the connection after a reset, timeout or memory shortage.
++// The pcb is already freed, so its handle arrives as the callback argument.
++void error_callback(void *arg, err_t err) {
++  aborted_tcp_connection(arg, err);
++}
++
+ // Callback for when a new connection is accepted
+ err_t accept_callback(void *arg, struct tcp_pcb *conn, err_t err) {
+   struct tcp_pcb *listener = arg;
+@@ -82,6 +94,10 @@ err_t accept_callback(void *arg, struct tcp_pcb *conn, err_t err) {
+   // Set a sent callback to handle outgoing data acknowledgements
+   tcp_sent(conn, sent_callback);
+ 
++  // Report aborts with the connection as the callback argument
++  tcp_arg(conn, conn);
++  tcp_err(conn, error_callback);
++
+   return ERR_OK;
+ }
+ 
+@@ -142,6 +158,10 @@ struct tcp_pcb *create_tcp_connection(uint8_t *host, int port) {
+   ip4_addr_t ipaddr;
+   IP4_ADDR(&ipaddr, host[0], host[1], host[2], host[3]);
+ 
++  // Report aborts, including a reset or timeout before the connection is established
++  tcp_arg(conn, conn);
++  tcp_err(conn, error_callback);
++
+   err_t err = tcp_connect(conn, &ipaddr, port, connected_callback);
+ 
+   if (err != ERR_OK) {
 diff --git a/packages/tcpip/wasm/tun_interface.c b/packages/tcpip/wasm/tun_interface.c
 index 93704e7..69ebc77 100644
 --- a/packages/tcpip/wasm/tun_interface.c
