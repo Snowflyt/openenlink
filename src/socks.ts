@@ -128,8 +128,15 @@ async function serve(
     return;
   }
 
-  const host = await resolver.lookup(destination.host, controller.signal);
-  const connection = await stack.tcp.connect({ host, port: destination.port });
+  let connection;
+  try {
+    const host = await resolver.lookup(destination.host, controller.signal);
+    connection = await stack.tcp.connect({ host, port: destination.port });
+  } catch (error) {
+    // Reply 1 is a general SOCKS server failure.
+    await write(socket, reply(1));
+    throw error;
+  }
   if (socket.destroyed) {
     await connection.close();
     return;
