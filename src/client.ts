@@ -7,10 +7,15 @@ import { AuthenticationError, Controller, PolicyError, tunnelRules } from "./con
 import { CredentialStore } from "./credentials.ts";
 import type { Credentials } from "./credentials.ts";
 import { login } from "./login.ts";
+import type { SocksAuth } from "./socks.ts";
 import type { Gateway } from "./tunnel.ts";
 import type { TunnelOptions } from "./worker.ts";
 
-export async function serve(config: Config, signal: AbortSignal): Promise<void> {
+export async function serve(
+  config: Config,
+  listener: { port: number; socks?: SocksAuth },
+  signal: AbortSignal,
+): Promise<void> {
   const store = new CredentialStore(config.server);
   const controller = new Controller(config.server, { userAgent: config.userAgent });
   let retry = 1000;
@@ -28,13 +33,9 @@ export async function serve(config: Config, signal: AbortSignal): Promise<void> 
           config.browser,
         );
         const gateway = gateways[gatewayIndex++ % gateways.length];
-        await runWorker(
-          { gateway, port: config.port, socks: config.socks, token, user },
-          signal,
-          () => {
-            retry = 1000;
-          },
-        );
+        await runWorker({ gateway, ...listener, token, user }, signal, () => {
+          retry = 1000;
+        });
       } catch (error) {
         signal.throwIfAborted();
         if (error instanceof AuthenticationError || error instanceof PolicyError) throw error;

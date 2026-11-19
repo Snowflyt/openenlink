@@ -3,15 +3,8 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { object, serverOrigin, text } from "./controller.ts";
-import type { SocksAuth } from "./socks.ts";
 
-export type Config = {
-  server: string;
-  port: number;
-  browser?: string;
-  socks?: SocksAuth;
-  userAgent?: string;
-};
+export type Config = { server: string; browser?: string; userAgent?: string };
 
 const configFile = join(
   process.platform === "win32" ? (process.env.APPDATA ?? homedir()) : join(homedir(), ".config"),
@@ -36,20 +29,10 @@ export async function loadConfig(): Promise<Config | undefined> {
   }
 
   const config = object(JSON.parse(saved));
-  const socks = config.socks === undefined ? undefined : object(config.socks);
   return {
-    port: portNumber(text(String(config.port), "SOCKS port")),
     server: serverOrigin(text(config.server, "server address")),
     ...(typeof config.browser === "string" ? { browser: config.browser } : {}),
     ...(typeof config.userAgent === "string" ? { userAgent: config.userAgent } : {}),
-    ...(socks ?
-      {
-        socks: {
-          username: text(socks.username, "SOCKS username"),
-          password: text(socks.password, "SOCKS password"),
-        },
-      }
-    : {}),
   };
 }
 

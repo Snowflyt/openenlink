@@ -8,50 +8,38 @@ import { CredentialStore } from "./credentials.ts";
 import { login } from "./login.ts";
 import { askSecret } from "./prompt.ts";
 
-const HELP = `openenlink login --server https://vpn.example.edu [--browser path] [--port 1088] [--socks-user name] [--user-agent text] [--remember]
-openenlink serve
-openenlink status
-openenlink logout`;
+const USAGE = `Usage:
+  openenlink login [https://vpn.example.edu] [--remember] [--browser path] [--user-agent text]
+  openenlink serve [--port 1088] [--socks-user name]
+  openenlink status
+  openenlink logout`;
+
+class UsageError extends Error {}
 
 async function main(): Promise<void> {
-  const { positionals, values } = parseArgs({
-    allowPositionals: true,
-    options: {
-      browser: { type: "string" },
-      help: { short: "h", type: "boolean" },
-      port: { type: "string" },
-      remember: { type: "boolean" },
-      server: { type: "string" },
-      "socks-user": { type: "string" },
-      "user-agent": { type: "string" },
-    },
-  });
-  if (values.help || !positionals.length) return console.log(HELP);
-  if (positionals.length !== 1) throw new Error("Choose one command");
-  const command = positionals[0];
-  if (!["login", "serve", "status", "logout"].includes(command)) throw new Error(HELP);
+  const [command, ...args] = process.argv.slice(2);
+  if (!command || command === "-h" || command === "--help") return console.log(USAGE);
 
-  const previous = await loadConfig();
-  const server = values.server ?? previous?.server;
-  if (!server) throw new Error("Run login with --server https://your-campus-gateway");
-  const socksUser = values["socks-user"];
-  let socks = previous?.socks;
-  if (socksUser === "") socks = undefined;
-  else if (socksUser !== undefined) {
-    socks = { username: socksUser, password: await askSecret("SOCKS password: ") };
-    if (Object.values(socks).some((value) => !value || Buffer.byteLength(value) > 255))
-      throw new Error("SOCKS username and password must be 1 to 255 bytes");
-  }
-
-  const config = {
-    browser: values.browser ?? previous?.browser,
-    port: portNumber(values.port ?? previous?.port ?? 1088),
-    server: serverOrigin(server),
-    socks,
-    userAgent: (values["user-agent"] ?? previous?.userAgent) || undefined,
-  };
-  const store = new CredentialStore(config.server);
   if (command === "login") {
+    const { positionals, values } = parseArgs({
+      allowPositionals: true,
+      args,
+      options: {
+        browser: { type: "string" },
+        remember: { type: "boolean" },
+        "user-agent": { type: "string" },
+      },
+    });
+    if (positionals.length > 1) throw new UsageError("login takes one gateway address");
+    const previous = await loadConfig();
+    const server = positionals[0] ?? previous?.server;
+    if (!server) throw new UsageError("login needs the gateway address");
+    const config = {
+      browser: values.browser ?? previous?.browser,
+      server: serverOrigin(server),
+      userAgent: (values["user-agent"] ?? previous?.userAgent) || undefined,
+    };
+    const store = new CredentialStore(config.server);
     const controller = new Controller(config.server, { userAgent: config.userAgent });
     try {
       const url = await controller.loginUrl();
@@ -74,24 +62,54 @@ async function main(): Promise<void> {
     } finally {
       await controller.close();
     }
-  } else if (command === "logout") {
-    await store.clear();
-    console.log("Saved authorization removed.");
-  } else if (command === "status") {
-    console.log((await store.load()) ? "Authorization saved" : "Login required");
-    const password = await store.loadPassword();
-    if (password) console.log(`Password remembered for ${password.username}`);
-  } else {
+    return;
+  }
+
+  if (command === "serve") {
+    const { values } = parseArgs({
+      args,
+      options: { port: { type: "string" }, "socks-user": { type: "string" } },
+    });
+    const port = portNumber(values.port ?? 1088);
+    const config = await loadConfig();
+    if (!config) throw new Error("Run openenlink login first");
+    const username = values["socks-user"];
+    const socks =
+      username === undefined ? undefined : (
+        { username, password: await askSecret("SOCKS password: ") }
+      );
+    if (socks && Object.values(socks).some((value) => !value || Buffer.byteLength(value) > 255))
+      throw new UsageError("SOCKS username and password must be 1 to 255 bytes");
+
     const controller = new AbortController();
     process.once("SIGINT", () => controller.abort());
     process.once("SIGTERM", () => controller.abort());
-    await serve(config, controller.signal).catch((error: unknown) => {
+    await serve(config, { port, socks }, controller.signal).catch((error: unknown) => {
       if (!controller.signal.aborted) throw error;
     });
+    return;
   }
+
+  if (command !== "status" && command !== "logout")
+    throw new UsageError(`Unknown command ${command}`);
+  parseArgs({ args, options: {} });
+  const config = await loadConfig();
+  const store = config && new CredentialStore(config.server);
+  if (command === "logout") {
+    await store?.clear();
+    console.log("Saved authorization removed.");
+    return;
+  }
+  console.log((await store?.load()) ? "Authorization saved" : "Login required");
+  const password = await store?.loadPassword();
+  if (password) console.log(`Password remembered for ${password.username}`);
 }
 
 await main().catch((error: unknown) => {
+  const usage =
+    error instanceof UsageError ||
+    String((error as { code?: unknown }).code).startsWith("ERR_PARSE_ARGS");
   console.error(error instanceof Error ? error.message : "openenlink failed");
-  process.exitCode = 1;
+  if (usage) console.error(USAGE);
+  process.exitCode = usage ? 2 : 1;
 });

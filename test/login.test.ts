@@ -217,20 +217,20 @@ await test(
     });
     try {
       await assert.rejects(
-        serve({ server: "https://vpn.example.test", port: 1088 }, new AbortController().signal),
+        serve({ server: "https://vpn.example.test" }, { port: 1088 }, new AbortController().signal),
         /Mock authorization complete/,
       );
       assert.deepEqual(saved, [{ accessToken: "renewed-access" }]);
       assert.equal(submitted, 1);
       await assert.rejects(
-        serve({ server: "https://vpn.example.test", port: 1088 }, new AbortController().signal),
+        serve({ server: "https://vpn.example.test" }, { port: 1088 }, new AbortController().signal),
         /retry after five minutes/,
       );
       assert.equal(submitted, 1);
       remembered = { ...remembered, lastAttemptAt: 0 };
       refreshToken = "rejected-refresh";
       await assert.rejects(
-        serve({ server: "https://vpn.example.test", port: 1088 }, new AbortController().signal),
+        serve({ server: "https://vpn.example.test" }, { port: 1088 }, new AbortController().signal),
         /Mock authorization complete/,
       );
       assert.equal(submitted, 2);

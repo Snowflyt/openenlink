@@ -10,7 +10,7 @@ Install Node.js 22.19.0 or newer, then:
 
 ```sh
 npm install
-npm start -- login --server https://wvpn.suda.edu.cn
+npm start -- login https://wvpn.suda.edu.cn
 npm start -- serve
 ```
 
@@ -18,13 +18,13 @@ Login opens an isolated Chrome window on the school's SSO page. Enter school cre
 
 Use `login --remember` to save a CAS username and password in the OS credential store. When a campus session ends, the client signs in again through the school page in a background browser. The saved password is filled only on its original HTTPS origin. A failed sign-in waits five minutes before another attempt; verification challenges can be completed with `login --remember`. `logout` removes both the authorization and remembered password.
 
-The proxy listens on `127.0.0.1:1088`. Use `--port` during login to choose another port. It supports SOCKS5 CONNECT and UDP ASSOCIATE over IPv4. Destination DNS queries use the campus resolver inside the tunnel. Configure applications to resolve names through SOCKS, for example:
+The proxy listens on `127.0.0.1:1088` while `serve` runs; `serve --port` chooses another port. It supports SOCKS5 CONNECT and UDP ASSOCIATE over IPv4. Destination DNS queries use the campus resolver inside the tunnel. Configure applications to resolve names through SOCKS, for example:
 
 ```sh
 curl --socks5-hostname 127.0.0.1:1088 https://its.suda.edu.cn/
 ```
 
-On a shared machine, other accounts can reach the same local port. `login --socks-user name` asks for a password and makes the proxy require SOCKS5 username/password authentication; clients then connect with `socks5h://name:password@127.0.0.1:1088`. The password is saved with the other settings. `--socks-user ""` turns authentication off again.
+On a shared machine, other accounts can reach the same local port. `serve --socks-user name` reads a password from the terminal, or one line from standard input, and makes the proxy require SOCKS5 username/password authentication. Clients then connect with `socks5h://name:password@127.0.0.1:1088`.
 
 Controller requests carry Node.js's default User-Agent. `login --user-agent text` replaces it for gateways that filter clients, and `--user-agent ""` restores the default.
 
