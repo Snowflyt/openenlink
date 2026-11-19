@@ -1,4 +1,5 @@
 import { once } from "node:events";
+import { getAsset, isSea } from "node:sea";
 import { setTimeout } from "node:timers/promises";
 import { Worker } from "node:worker_threads";
 
@@ -91,7 +92,11 @@ async function session(
 
 async function runWorker(options: TunnelOptions, signal: AbortSignal): Promise<void> {
   // Ending the worker releases lwIP's timer, sockets and WASM memory together.
-  const worker = new Worker(new URL("./worker.ts", import.meta.url), { workerData: options });
+  // A worker loads only real files, so the single executable runs its bundled copy as code.
+  const worker =
+    isSea() ?
+      new Worker(getAsset("worker.js", "utf8"), { eval: true, workerData: options })
+    : new Worker(new URL("./worker.ts", import.meta.url), { workerData: options });
   const stop = () => {
     void worker.terminate();
   };
