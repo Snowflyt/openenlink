@@ -53,7 +53,7 @@ npm start -- logout
 
 `logout` removes this client's saved authorization. Commands exit with status 2 on usage errors and 3 when someone needs to run `login`, so a script that restarts `serve` can stop at 3. `Ctrl+C` stops the proxy. After a dropped tunnel, the client retries with a delay of up to 30 seconds. It renews expired access tokens with a refresh token or remembered password. Run `login` when credentials expire or the school requests verification.
 
-Settings are saved in `~/.config/openenlink/config.json`, or `%APPDATA%\openenlink\config.json` on Windows. Authorization stays in the OS credential store. Linux needs Secret Service or the kernel keyring; kernel-keyring credentials last until reboot.
+Settings are saved in `$XDG_CONFIG_HOME/openenlink/config.json` (`~/.config/openenlink/config.json` when it is unset), or `%APPDATA%\openenlink\config.json` on Windows. Authorization stays in the OS credential store. Linux needs Secret Service or the kernel keyring; kernel-keyring credentials last until reboot.
 
 ## Development
 

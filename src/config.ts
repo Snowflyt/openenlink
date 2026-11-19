@@ -1,16 +1,24 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 
 import { object, serverOrigin, text } from "./controller.ts";
 
 export type Config = { server: string; browser?: string; userAgent?: string };
 
-const configFile = join(
-  process.platform === "win32" ? (process.env.APPDATA ?? homedir()) : join(homedir(), ".config"),
-  "openenlink",
-  "config.json",
-);
+function configFile(): string {
+  if (process.platform === "win32") {
+    if (!process.env.APPDATA) throw new Error("APPDATA is not set");
+    return join(process.env.APPDATA, "openenlink", "config.json");
+  }
+  // XDG Base Directory: an unset, empty or relative XDG_CONFIG_HOME means ~/.config.
+  const xdg = process.env.XDG_CONFIG_HOME;
+  return join(
+    xdg && isAbsolute(xdg) ? xdg : join(homedir(), ".config"),
+    "openenlink",
+    "config.json",
+  );
+}
 
 export function portNumber(value: string | number): number {
   const port = Number(value);
@@ -22,7 +30,7 @@ export function portNumber(value: string | number): number {
 export async function loadConfig(): Promise<Config | undefined> {
   let saved: string;
   try {
-    saved = await readFile(configFile, "utf8");
+    saved = await readFile(configFile(), "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
     throw error;
@@ -37,6 +45,7 @@ export async function loadConfig(): Promise<Config | undefined> {
 }
 
 export async function saveConfig(config: Config): Promise<void> {
-  await mkdir(dirname(configFile), { mode: 0o700, recursive: true });
-  await writeFile(configFile, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
+  const file = configFile();
+  await mkdir(dirname(file), { mode: 0o700, recursive: true });
+  await writeFile(file, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
 }
