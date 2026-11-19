@@ -5,7 +5,13 @@ import { dirname, join } from "node:path";
 import { object, serverOrigin, text } from "./controller.ts";
 import type { SocksAuth } from "./socks.ts";
 
-export type Config = { server: string; port: number; browser?: string; socks?: SocksAuth };
+export type Config = {
+  server: string;
+  port: number;
+  browser?: string;
+  socks?: SocksAuth;
+  userAgent?: string;
+};
 
 const configFile = join(
   process.platform === "win32" ? (process.env.APPDATA ?? homedir()) : join(homedir(), ".config"),
@@ -35,6 +41,7 @@ export async function loadConfig(): Promise<Config | undefined> {
     port: portNumber(text(String(config.port), "SOCKS port")),
     server: serverOrigin(text(config.server, "server address")),
     ...(typeof config.browser === "string" ? { browser: config.browser } : {}),
+    ...(typeof config.userAgent === "string" ? { userAgent: config.userAgent } : {}),
     ...(socks ?
       {
         socks: {

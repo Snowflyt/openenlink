@@ -51,11 +51,19 @@ export function signature(
 export class Controller {
   readonly origin: string;
   private readonly fetch: typeof globalThis.fetch;
+  private readonly userAgent: string | undefined;
   private readonly dispatcher = new Agent({ connect: { rejectUnauthorized: true } });
 
-  constructor(server: string, fetch = globalThis.fetch) {
+  constructor(
+    server: string,
+    {
+      fetch = globalThis.fetch,
+      userAgent,
+    }: { fetch?: typeof globalThis.fetch; userAgent?: string } = {},
+  ) {
     this.origin = serverOrigin(server);
     this.fetch = fetch;
+    this.userAgent = userAgent;
   }
 
   async request(
@@ -71,7 +79,11 @@ export class Controller {
     const options = {
       body: json,
       dispatcher: this.dispatcher,
-      headers: { ...signature(url, authorization, json), "Content-Type": "application/json" },
+      headers: {
+        ...signature(url, authorization, json),
+        "Content-Type": "application/json",
+        ...(this.userAgent ? { "User-Agent": this.userAgent } : {}),
+      },
       method: body === undefined ? "GET" : "POST",
       redirect: "error" as const,
       signal: AbortSignal.timeout(15_000),

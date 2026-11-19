@@ -31,7 +31,10 @@ await test("Controller signs the bytes it sends and uses the refresh token for r
       }),
     );
   };
-  const controller = new Controller("https://vpn.example.test", mock);
+  const controller = new Controller("https://vpn.example.test", {
+    fetch: mock,
+    userAgent: "Campus/1.0",
+  });
   try {
     assert.equal(await controller.user("access"), "student");
     assert.deepEqual(await controller.refresh("refresh"), {
@@ -40,6 +43,7 @@ await test("Controller signs the bytes it sends and uses the refresh token for r
     });
     assert.equal(new Headers(requests[0].options.headers).get("Authorization"), "Bearer access");
     assert.equal(requests[0].url.pathname, "/enclient/api/users/info");
+    assert.equal(new Headers(requests[0].options.headers).get("User-Agent"), "Campus/1.0");
     assert.equal(new Headers(requests[1].options.headers).get("Authorization"), "Bearer refresh");
     assert.equal(requests[1].url.pathname, "/enclient/api/users/client/refreshToken");
     await assert.rejects(
@@ -53,9 +57,9 @@ await test("Controller signs the bytes it sends and uses the refresh token for r
 });
 
 await test("Controller distinguishes expired authorization from malformed replies", async () => {
-  const controller = new Controller("https://vpn.example.test", () =>
-    Promise.resolve(new Response(null, { status: 401 })),
-  );
+  const controller = new Controller("https://vpn.example.test", {
+    fetch: () => Promise.resolve(new Response(null, { status: 401 })),
+  });
   try {
     await assert.rejects(controller.user("expired"), AuthenticationError);
   } finally {
@@ -78,9 +82,9 @@ await test("Controller distinguishes expired authorization from malformed replie
 });
 
 await test("Controller recognizes expired sessions returned with HTTP 200", async () => {
-  const controller = new Controller("https://vpn.example.test", () =>
-    Promise.resolve(Response.json({ code: "3010", data: null })),
-  );
+  const controller = new Controller("https://vpn.example.test", {
+    fetch: () => Promise.resolve(Response.json({ code: "3010", data: null })),
+  });
   try {
     await assert.rejects(controller.user("expired"), AuthenticationError);
   } finally {
@@ -120,14 +124,15 @@ await test("Browser completion accepts tokens only from the configured school or
 
 await test("Browser login uses the SSO entry advertised by the server", async () => {
   const path = "/enclient/api/users/admin/custom/page/login/sso/OIDC";
-  const controller = new Controller("https://vpn.example.test", () =>
-    Promise.resolve(
-      Response.json({
-        code: "200",
-        data: { ssoLoginTypes: [{ hidden: false, loginType: "SSO_OIDC", loginUrl: path }] },
-      }),
-    ),
-  );
+  const controller = new Controller("https://vpn.example.test", {
+    fetch: () =>
+      Promise.resolve(
+        Response.json({
+          code: "200",
+          data: { ssoLoginTypes: [{ hidden: false, loginType: "SSO_OIDC", loginUrl: path }] },
+        }),
+      ),
+  });
   try {
     const url = await controller.loginUrl();
     assert.equal(url.pathname, path);

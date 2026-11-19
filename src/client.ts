@@ -12,7 +12,7 @@ import type { TunnelOptions } from "./worker.ts";
 
 export async function serve(config: Config, signal: AbortSignal): Promise<void> {
   const store = new CredentialStore(config.server);
-  const controller = new Controller(config.server);
+  const controller = new Controller(config.server, { userAgent: config.userAgent });
   let retry = 1000;
   let gatewayIndex = 0;
   try {

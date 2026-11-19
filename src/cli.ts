@@ -8,7 +8,7 @@ import { CredentialStore } from "./credentials.ts";
 import { login } from "./login.ts";
 import { askSecret } from "./prompt.ts";
 
-const HELP = `openenlink login --server https://vpn.example.edu [--browser path] [--port 1088] [--socks-user name] [--remember]
+const HELP = `openenlink login --server https://vpn.example.edu [--browser path] [--port 1088] [--socks-user name] [--user-agent text] [--remember]
 openenlink serve
 openenlink status
 openenlink logout`;
@@ -23,6 +23,7 @@ async function main(): Promise<void> {
       remember: { type: "boolean" },
       server: { type: "string" },
       "socks-user": { type: "string" },
+      "user-agent": { type: "string" },
     },
   });
   if (values.help || !positionals.length) return console.log(HELP);
@@ -47,10 +48,11 @@ async function main(): Promise<void> {
     port: portNumber(values.port ?? previous?.port ?? 1088),
     server: serverOrigin(server),
     socks,
+    userAgent: (values["user-agent"] ?? previous?.userAgent) || undefined,
   };
   const store = new CredentialStore(config.server);
   if (command === "login") {
-    const controller = new Controller(config.server);
+    const controller = new Controller(config.server, { userAgent: config.userAgent });
     try {
       const url = await controller.loginUrl();
       console.log("Sign in on the school page.");
