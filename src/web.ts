@@ -2,11 +2,18 @@
 // followed one hop at a time so every request stays on HTTPS and a posted password never
 // travels to a second address.
 
+import { Agent } from "undici";
+
 import { requestFailure } from "./controller.ts";
 
 export type Cookie = { name: string; value: string; host: string; path: string; expires?: number };
 
 const HOPS = 12;
+
+// undici alone gives up on a connection after 10 seconds, the name lookup included, and a slow
+// network needs longer. The limit stays on because nothing else ends a connection that stalls
+// while opening: a signal ends the request and leaves the socket.
+const dispatcher = new Agent({ connect: { timeout: 60_000 } });
 
 export class Page {
   readonly url: URL;
@@ -22,10 +29,16 @@ export class Page {
 
 export class Web {
   private readonly jar = new Map<string, Cookie>();
+  private readonly signal: AbortSignal | undefined;
   private readonly userAgent: string | undefined;
 
-  constructor({ cookies = [], userAgent }: { cookies?: Cookie[]; userAgent?: string } = {}) {
+  constructor({
+    cookies = [],
+    signal,
+    userAgent,
+  }: { cookies?: Cookie[]; signal?: AbortSignal; userAgent?: string } = {}) {
     for (const cookie of cookies) this.jar.set(cookieKey(cookie), cookie);
+    this.signal = signal;
     this.userAgent = userAgent;
   }
 
@@ -76,16 +89,18 @@ export class Web {
       .filter((cookie) => pathMatches(url.pathname, cookie.path))
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join("; ");
-    const response = await fetch(url, {
+    const options = {
       ...(form ? { body: form.body, method: "POST" } : {}),
+      dispatcher,
       headers: {
         ...(cookies ? { Cookie: cookies } : {}),
         ...(form ? { Referer: form.referer.href } : {}),
         ...(this.userAgent ? { "User-Agent": this.userAgent } : {}),
       },
-      redirect: "manual",
-      signal: AbortSignal.timeout(15_000),
-    }).catch((error: unknown) => {
+      redirect: "manual" as const,
+      ...(this.signal ? { signal: this.signal } : {}),
+    };
+    const response = await fetch(url, options).catch((error: unknown) => {
       throw requestFailure(url, error);
     });
     for (const header of response.headers.getSetCookie()) {

@@ -26,6 +26,8 @@ export type LoginOptions = {
   // Shows the captcha image and returns the answer; nothing means the browser takes over.
   captcha?: (image: Buffer) => Promise<string | undefined>;
   cookies?: Cookie[];
+  // Ends the sign-in's requests.
+  signal?: AbortSignal;
   userAgent?: string;
 };
 
@@ -64,6 +66,7 @@ function hashParam(url: URL, name: string): string | undefined {
 export async function login(entry: URL, options: LoginOptions): Promise<SignIn> {
   const web = new Web({
     ...(options.cookies ? { cookies: options.cookies } : {}),
+    ...(options.signal ? { signal: options.signal } : {}),
     ...(options.userAgent ? { userAgent: options.userAgent } : {}),
   });
   const done = (url: URL) => gatewayTokens(url, entry, web);

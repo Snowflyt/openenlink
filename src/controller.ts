@@ -62,7 +62,12 @@ export class Controller {
   readonly origin: string;
   private readonly fetch: typeof globalThis.fetch;
   private readonly userAgent: string | undefined;
-  private readonly dispatcher = new Agent({ connect: { rejectUnauthorized: true } });
+  // undici alone gives up on a connection after 10 seconds, the name lookup included, and a slow
+  // network needs longer. The limit stays on because nothing else ends a connection that stalls
+  // while opening: a signal ends the request and leaves the socket.
+  private readonly dispatcher = new Agent({
+    connect: { rejectUnauthorized: true, timeout: 60_000 },
+  });
 
   constructor(
     server: string,
@@ -80,6 +85,7 @@ export class Controller {
     path: string,
     token = "",
     body?: Record<string, unknown>,
+    signal?: AbortSignal,
   ): Promise<Record<string, unknown>> {
     const url = new URL(path, this.origin);
     if (url.origin !== this.origin)
@@ -96,7 +102,7 @@ export class Controller {
       },
       method: body === undefined ? "GET" : "POST",
       redirect: "error" as const,
-      signal: AbortSignal.timeout(15_000),
+      ...(signal ? { signal } : {}),
     };
     const response = await this.fetch(url, options).catch((error: unknown) => {
       throw requestFailure(url, error);
@@ -120,8 +126,9 @@ export class Controller {
     return object(result.data);
   }
 
-  async loginUrl(): Promise<URL> {
-    const config = await this.request("/enclient/api/users/custom/page/login/cfg/select", "", {});
+  async loginUrl(signal?: AbortSignal): Promise<URL> {
+    const path = "/enclient/api/users/custom/page/login/cfg/select";
+    const config = await this.request(path, "", {}, signal);
     if (!Array.isArray(config.ssoLoginTypes)) throw new Error("Server did not offer browser SSO");
     const oidc = config.ssoLoginTypes
       .map(object)
@@ -132,17 +139,21 @@ export class Controller {
     return url;
   }
 
-  async user(token: string): Promise<string> {
-    const user = await this.request("/enclient/api/users/info", token);
+  async user(token: string, signal?: AbortSignal): Promise<string> {
+    const user = await this.request("/enclient/api/users/info", token, undefined, signal);
     return text(user.username, "username");
   }
 
-  async rules(token: string): Promise<Record<string, unknown>> {
-    return this.request("/enclient/api/users/terminal/rules", token);
+  async rules(token: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    return this.request("/enclient/api/users/terminal/rules", token, undefined, signal);
   }
 
-  async refresh(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
-    const result = await this.request("/enclient/api/users/client/refreshToken", refreshToken);
+  async refresh(
+    refreshToken: string,
+    signal?: AbortSignal,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const path = "/enclient/api/users/client/refreshToken";
+    const result = await this.request(path, refreshToken, undefined, signal);
     return {
       accessToken: text(result.token, "access token"),
       refreshToken: text(result.refreshToken, "refresh token"),

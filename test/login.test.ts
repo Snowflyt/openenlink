@@ -3,9 +3,9 @@ import { once } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createServer } from "node:https";
 import { test } from "node:test";
+import { getCACertificates, setDefaultCACertificates } from "node:tls";
 
 import { generate } from "selfsigned";
-import { Agent, setGlobalDispatcher } from "undici";
 
 import { UnsupportedLogin } from "../src/adapter.ts";
 import { serve } from "../src/client.ts";
@@ -48,7 +48,7 @@ const certificate = await generate([{ name: "commonName", value: "localhost" }],
     },
   ],
 });
-setGlobalDispatcher(new Agent({ connect: { ca: certificate.cert } }));
+setDefaultCACertificates([...getCACertificates(), certificate.cert]);
 const server = createServer(
   { key: certificate.private, cert: certificate.cert },
   (request, response) => {

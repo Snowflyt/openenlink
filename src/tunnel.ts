@@ -52,7 +52,7 @@ export class Tunnel {
       ...(gateway.serverName && { servername: gateway.serverName }),
     });
     socket.on("error", () => {});
-    socket.setTimeout(15_000, () => socket.destroy(new Error("Campus gateway timed out")));
+    socket.setTimeout(30_000, () => socket.destroy(new Error("Campus gateway timed out")));
 
     try {
       await once(socket, "secureConnect");

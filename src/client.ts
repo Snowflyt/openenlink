@@ -24,18 +24,25 @@ export async function serve(
   try {
     for (;;) {
       signal.throwIfAborted();
-      const started = Date.now();
       const credentials = await store.load();
       if (!credentials) throw new AuthenticationError("Run login to authorize this client");
+      let lived = 0;
       try {
+        // Nobody watches these requests, so a server that stops answering must not hold the
+        // loop. Two minutes covers them on a slow network.
+        const limit = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
         const { gateways, token, user } = await session(
           controller,
           credentials,
           store,
+          limit,
           config.userAgent,
         );
         const gateway = gateways[gatewayIndex++ % gateways.length];
-        await runWorker({ gateway, ...listener, token, user }, signal);
+        const started = Date.now();
+        await runWorker({ gateway, ...listener, token, user }, signal).finally(() => {
+          lived = Date.now() - started;
+        });
       } catch (error) {
         signal.throwIfAborted();
         if (error instanceof AuthenticationError || error instanceof PolicyError) throw error;
@@ -44,7 +51,7 @@ export async function serve(
       signal.throwIfAborted();
       // Another client on the same account ends our tunnel right after it starts; growing the
       // delay keeps the two from replacing each other every second.
-      if (Date.now() - started > 60_000) retry = 1000;
+      if (lived > 60_000) retry = 1000;
       console.error(`Reconnecting in ${retry / 1000} seconds`);
       await setTimeout(retry, undefined, { signal });
       retry = Math.min(retry * 2, 30_000);
@@ -58,17 +65,18 @@ async function session(
   controller: Controller,
   credentials: Credentials,
   store: CredentialStore,
+  signal: AbortSignal,
   userAgent?: string,
 ): Promise<{ user: string; token: string; gateways: Gateway[] }> {
   try {
-    const user = await controller.user(credentials.accessToken);
-    return { ...tunnelRules(await controller.rules(credentials.accessToken)), user };
+    const user = await controller.user(credentials.accessToken, signal);
+    return { ...tunnelRules(await controller.rules(credentials.accessToken, signal)), user };
   } catch (error) {
     if (!(error instanceof AuthenticationError)) throw error;
     let renewed;
     if (credentials.refreshToken) {
       try {
-        renewed = await controller.refresh(credentials.refreshToken);
+        renewed = await controller.refresh(credentials.refreshToken, signal);
       } catch (error) {
         if (!(error instanceof AuthenticationError)) throw error;
       }
@@ -77,11 +85,11 @@ async function session(
       const password = await store.loadPassword();
       if (!password) throw error;
       console.log("Campus session ended; signing in on the school site");
-      renewed = await renew(await controller.loginUrl(), password, store, userAgent);
+      renewed = await renew(await controller.loginUrl(signal), password, store, signal, userAgent);
     }
     await store.save(renewed);
-    const user = await controller.user(renewed.accessToken);
-    return { ...tunnelRules(await controller.rules(renewed.accessToken)), user };
+    const user = await controller.user(renewed.accessToken, signal);
+    return { ...tunnelRules(await controller.rules(renewed.accessToken, signal)), user };
   }
 }
 
@@ -91,10 +99,12 @@ async function renew(
   entry: URL,
   password: RememberedPassword,
   store: CredentialStore,
+  signal: AbortSignal,
   userAgent?: string,
 ): Promise<Credentials> {
   try {
     const { cookies, credentials } = await login(entry, {
+      signal,
       ...(password.cookies ? { cookies: password.cookies } : {}),
       ...(userAgent ? { userAgent } : {}),
       account: async (origin) => {
