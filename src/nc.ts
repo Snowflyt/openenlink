@@ -23,8 +23,7 @@ export async function nc(host: string, port: number, proxyPort: number): Promise
   const request = Buffer.concat([Buffer.from([5, 1, 0, 3, name.length]), name, Buffer.alloc(2)]);
   request.writeUInt16BE(port, request.length - 2);
   await write(socket, request);
-  if ((await reader.read(10))[1] !== 0)
-    throw new Error(`Campus connection to ${host}:${port} failed`);
+  if ((await reader.read(10))[1] !== 0) throw new Error(`Connection to ${host}:${port} failed`);
 
   process.stdin.pipe(socket);
   let chunk: Buffer | undefined;

@@ -56,7 +56,7 @@ export async function serveHttp(
     return;
   }
 
-  // The campus connection closes after one response, so the next request opens a new one and
+  // The internal host's connection closes after one response, so the next request opens a new one and
   // may go to another host.
   const request = [
     `${method} ${url.pathname}${url.search} ${version}`,

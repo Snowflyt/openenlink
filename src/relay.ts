@@ -6,7 +6,7 @@ import type { ByteReader } from "./protocol.ts";
 import { write } from "./protocol.ts";
 
 // Copies bytes both ways until each side ends its stream, then closes both sides. `reply` goes to
-// the client and `request` to the campus host before the copying starts.
+// the client and `request` to the internal host before the copying starts.
 export async function relay(
   socket: Socket,
   reader: ByteReader,

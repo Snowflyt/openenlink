@@ -19,7 +19,7 @@ export class Resolver {
   async lookup(host: string, signal: AbortSignal): Promise<string> {
     if (isIPv4(host)) return host;
     const original = domainToASCII(host).toLowerCase().replace(/\.$/, "");
-    if (!original) throw new Error("Invalid campus hostname");
+    if (!original) throw new Error("Invalid hostname");
     const cached = this.cache.get(original);
     if (cached && cached.expires > Date.now()) return cached.address;
 
@@ -27,7 +27,7 @@ export class Resolver {
     let ttl = Infinity;
     const seen = new Set<string>();
     for (let query = 0; query < 8; query++) {
-      if (seen.has(name)) throw new Error("Campus DNS returned a CNAME loop");
+      if (seen.has(name)) throw new Error("Internal DNS returned a CNAME loop");
       seen.add(name);
       const response = await this.query(name, signal);
       const answers = response.answers ?? [];
@@ -52,9 +52,9 @@ export class Resolver {
         ttl = Math.min(ttl, alias.ttl ?? 0);
       }
       if (name === requested)
-        throw new Error(`Campus DNS returned no IPv4 address for ${original}`);
+        throw new Error(`Internal DNS returned no IPv4 address for ${original}`);
     }
-    throw new Error("Campus DNS returned too many CNAME redirects");
+    throw new Error("Internal DNS returned too many CNAME redirects");
   }
 
   private async query(name: string, signal: AbortSignal): Promise<packet.DecodedPacket> {
@@ -65,13 +65,13 @@ export class Resolver {
     const id = randomInt(65536);
     let failure: Error | undefined;
     const cancel = () => {
-      failure = new Error("Campus DNS query cancelled");
+      failure = new Error("Internal DNS query cancelled");
       void reader.cancel();
     };
     signal.addEventListener("abort", cancel, { once: true });
     if (signal.aborted) cancel();
     const timer = setTimeout(() => {
-      failure = new Error(`Campus DNS timed out for ${name}`);
+      failure = new Error(`Internal DNS timed out for ${name}`);
       void reader.cancel();
     }, 5000);
 
@@ -88,7 +88,7 @@ export class Resolver {
       });
       for (;;) {
         const datagram = await reader.read();
-        if (datagram.done) throw failure ?? new Error("Campus DNS socket closed");
+        if (datagram.done) throw failure ?? new Error("Internal DNS socket closed");
         const message = datagram.value;
         if (message.host !== this.server || message.port !== 53 || message.data.length < 12)
           continue;
@@ -98,8 +98,8 @@ export class Resolver {
         if (response.type !== "response" || response.questions?.[0]?.name.toLowerCase() !== name)
           continue;
         const rcode = data.readUInt16BE(2) & 15;
-        if (rcode !== 0) throw new Error(`Campus DNS returned RCODE ${rcode} for ${name}`);
-        if (response.flag_tc) throw new Error(`Campus DNS response was truncated for ${name}`);
+        if (rcode !== 0) throw new Error(`Internal DNS returned RCODE ${rcode} for ${name}`);
+        if (response.flag_tc) throw new Error(`Internal DNS response was truncated for ${name}`);
         return response;
       }
     } finally {

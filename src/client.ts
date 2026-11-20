@@ -46,7 +46,7 @@ export async function serve(
       } catch (error) {
         signal.throwIfAborted();
         if (error instanceof AuthenticationError || error instanceof PolicyError) throw error;
-        console.error(error instanceof Error ? error.message : "Campus connection failed");
+        console.error(error instanceof Error ? error.message : "Connection failed");
       }
       signal.throwIfAborted();
       // Another client on the same account ends our tunnel right after it starts; growing the
@@ -84,7 +84,7 @@ async function session(
     if (!renewed) {
       const password = await store.loadPassword();
       if (!password) throw error;
-      console.log("Campus session ended; signing in on the school site");
+      console.log("Session ended; signing in again");
       renewed = await renew(await controller.loginUrl(signal), password, store, signal, userAgent);
     }
     await store.save(renewed);
@@ -93,7 +93,7 @@ async function session(
   }
 }
 
-// Signs in again with the school's session cookies, or with the remembered password at most
+// Signs in again with the sign-in page's session cookies, or with the remembered password at most
 // once every five minutes, so a changed password cannot lock the account.
 async function renew(
   entry: URL,
@@ -110,7 +110,7 @@ async function renew(
       account: async (origin) => {
         if (origin !== password.origin)
           throw new AuthenticationError(
-            "School sign-in moved to another site; run openenlink login --remember",
+            "The sign-in page moved to another site; run openenlink login --remember",
           );
         if (Date.now() - (password.lastAttemptAt ?? 0) < 5 * 60 * 1000)
           throw new AuthenticationError(
@@ -132,7 +132,7 @@ async function renew(
     }
     if (error instanceof UnsupportedLogin)
       throw new AuthenticationError(
-        `${error.message || "School sign-in needs a browser"}; run openenlink login`,
+        `${error.message || "Sign-in needs a browser"}; run openenlink login`,
       );
     throw error;
   }
@@ -146,13 +146,13 @@ async function runWorker(options: TunnelOptions, signal: AbortSignal): Promise<v
   };
   signal.addEventListener("abort", stop, { once: true });
   worker.once("message", () => {
-    console.log(`Campus proxy listening on 127.0.0.1:${options.port}`);
+    console.log(`Proxy listening on 127.0.0.1:${options.port}`);
   });
 
   try {
     const [code] = await once(worker, "exit");
     if (code !== 0 && !signal.aborted)
-      throw new Error(`Campus tunnel stopped with status ${String(code)}`);
+      throw new Error(`Tunnel stopped with status ${String(code)}`);
   } finally {
     signal.removeEventListener("abort", stop);
     await worker.terminate();

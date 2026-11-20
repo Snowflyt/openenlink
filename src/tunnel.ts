@@ -18,7 +18,7 @@ import type { Addresses } from "./protocol.ts";
 
 export type Gateway = { host: string; port: number; serverName?: string; dns?: string };
 
-// RFC 2544 address used inside the virtual stack for campus loopback DNS.
+// RFC 2544 address used inside the virtual stack for a loopback DNS address.
 // eslint-disable-next-line sonarjs/no-hardcoded-ip
 const DNS_ALIAS = "198.18.0.53";
 
@@ -52,7 +52,7 @@ export class Tunnel {
       ...(gateway.serverName && { servername: gateway.serverName }),
     });
     socket.on("error", () => {});
-    socket.setTimeout(30_000, () => socket.destroy(new Error("Campus gateway timed out")));
+    socket.setTimeout(30_000, () => socket.destroy(new Error("Gateway timed out")));
 
     try {
       await once(socket, "secureConnect");
@@ -62,7 +62,7 @@ export class Tunnel {
       if (gateway.dns) addresses.dns = gateway.dns;
       const stack = await createStack({
         initializeLoopback: false,
-        // lwIP routes 127/8 locally. An alias keeps campus loopback DNS on the tunnel.
+        // lwIP routes 127/8 locally. An alias keeps a loopback DNS address on the tunnel.
         nameServer: {
           ip: addresses.dns.startsWith("127.") ? DNS_ALIAS : addresses.dns,
           port: 53,
@@ -91,7 +91,7 @@ export class Tunnel {
       if (signal.aborted) return;
       // A socket idle timer restarts on our own heartbeats, so the gateway's silence is timed here.
       if (Date.now() - received > 30_000) {
-        this.close(new Error("Campus gateway sent nothing for 30 seconds"));
+        this.close(new Error("Gateway sent nothing for 30 seconds"));
         return;
       }
       if (heartbeatPending) return;

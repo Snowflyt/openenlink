@@ -11,7 +11,7 @@ export type RememberedPassword = {
   username: string;
   password: string;
   lastAttemptAt?: number;
-  // The school's session cookies, tried before the password.
+  // The sign-in page's session cookies, tried before the password.
   cookies?: Cookie[];
 };
 

@@ -1,4 +1,4 @@
-// HTTP for school sign-in pages. Cookies stay with the host that set them, and redirects are
+// HTTP for sign-in pages. Cookies stay with the host that set them, and redirects are
 // followed one hop at a time so every request stays on HTTPS and a posted password never
 // travels to a second address.
 
@@ -80,11 +80,11 @@ export class Web {
       url = new URL(location, url);
       form = undefined;
     }
-    throw new Error("School sign-in redirected too many times");
+    throw new Error("Sign-in redirected too many times");
   }
 
   private async send(url: URL, form?: { body: URLSearchParams; referer: URL }): Promise<Response> {
-    if (url.protocol !== "https:") throw new Error(`School sign-in left HTTPS at ${url.host}`);
+    if (url.protocol !== "https:") throw new Error(`Sign-in left HTTPS at ${url.host}`);
     const cookies = this.cookies(url.hostname)
       .filter((cookie) => pathMatches(url.pathname, cookie.path))
       .map((cookie) => `${cookie.name}=${cookie.value}`)

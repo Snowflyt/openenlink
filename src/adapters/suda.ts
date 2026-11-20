@@ -65,7 +65,7 @@ export const suda: Adapter = {
       return { reason: "password", message: "Wrong username or password" };
     if (CAPTCHA.some((name) => known.includes(name)))
       return { reason: "captcha", message: "Wrong or expired captcha" };
-    let description = "School sign-in failed";
+    let description = "Sign-in failed";
     if (known) description += ` (${known})`;
     if (message) description += `: ${message}`;
     return { reason: "other", message: description };

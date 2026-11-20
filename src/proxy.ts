@@ -47,7 +47,7 @@ export class ProxyServer {
       socket.setTimeout(15_000, () => socket.destroy());
       void serve(socket, stack, resolver, authorize).catch((error: unknown) => {
         console.error(
-          "Campus proxy connection failed:",
+          "Proxy connection failed:",
           error instanceof Error ? error.message : "Unknown error",
         );
         socket.destroy();

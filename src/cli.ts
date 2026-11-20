@@ -24,8 +24,8 @@ const PASSWORD_ATTEMPTS = 3;
 
 class UsageError extends Error {}
 
-// Signs in on the school's page from the terminal; a school without a terminal sign-in, or an
-// empty username or captcha, moves the sign-in to a browser.
+// Signs in on the sign-in page from the terminal; a page without an adapter, or an empty
+// username or captcha, moves the sign-in to a browser.
 async function signIn(entry: URL, config: Config, user?: string): Promise<SignIn> {
   let username = user ?? config.user;
   for (let attempt = 1; ; attempt++) {
@@ -33,7 +33,7 @@ async function signIn(entry: URL, config: Config, user?: string): Promise<SignIn
       return await login(entry, {
         ...(config.userAgent ? { userAgent: config.userAgent } : {}),
         account: async (origin) => {
-          console.log(`Signing in at ${origin}`);
+          console.log(`Sign-in page: ${origin}`);
           if (user === undefined || attempt > 1) {
             const typed = await ask(
               username ? `Username [${username}]: ` : "Username (empty to use a browser): ",
@@ -107,8 +107,7 @@ async function main(): Promise<void> {
     const controller = new Controller(config.server, { userAgent: config.userAgent });
     try {
       const entry = await controller.loginUrl();
-      if (values.remember)
-        console.log(`The school username and password will be kept in ${where}.`);
+      if (values.remember) console.log(`The username and password will be kept in ${where}.`);
       const { account, cookies, credentials } = await signIn(entry, config, values.user);
       await store.save(credentials);
       if (values.remember && account) await store.savePassword({ ...account, cookies });

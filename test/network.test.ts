@@ -71,7 +71,7 @@ async function exercise(): Promise<void> {
       for await (const query of dns) {
         const response = Buffer.concat([
           query.data,
-          // The answer name points to the question, as in the live campus reply.
+          // The answer name points to the question, as in a live gateway's reply.
           Buffer.from("c00c000100010000003c00040a580001", "hex"),
         ]);
         response.writeUInt16BE(0x8180, 2);
@@ -82,7 +82,7 @@ async function exercise(): Promise<void> {
   } else {
     const dns = new DnsServer(peer.udp, {
       request(query) {
-        assert.equal(query.name, "campus.test");
+        assert.equal(query.name, "intranet.test");
         return Promise.resolve({ ip: "10.88.0.1", ttl: 60, type: "A" as const });
       },
     });
@@ -207,7 +207,7 @@ async function exercise(): Promise<void> {
 
     const stranger = connect(proxy.port, "127.0.0.1");
     const strangerReader = new ByteReader(stranger);
-    await write(stranger, Buffer.from("CONNECT campus.test:8080 HTTP/1.1\r\n\r\n"));
+    await write(stranger, Buffer.from("CONNECT intranet.test:8080 HTTP/1.1\r\n\r\n"));
     assert.match((await strangerReader.until("\r\n\r\n", 1024)).toString(), /^HTTP\/1\.1 407 /);
     stranger.destroy();
   }
@@ -215,7 +215,7 @@ async function exercise(): Promise<void> {
   const tcp = connect(proxy.port, "127.0.0.1");
   const reader = new ByteReader(tcp);
   await handshake(tcp, reader);
-  const host = Buffer.from("campus.test");
+  const host = Buffer.from("intranet.test");
   await write(
     tcp,
     Buffer.concat([Buffer.from([5, 1, 0, 3, host.length]), host, Buffer.from([31, 144])]),
@@ -227,7 +227,7 @@ async function exercise(): Promise<void> {
   tcp.end();
   assert.equal(await reader.chunk(), undefined);
 
-  // Nothing listens on port 8079, so the campus host resets the connection.
+  // Nothing listens on port 8079, so the internal host resets the connection.
   const refused = connect(proxy.port, "127.0.0.1");
   const refusedReader = new ByteReader(refused);
   await handshake(refused, refusedReader);
@@ -244,7 +244,7 @@ async function exercise(): Promise<void> {
   const tunneledReader = new ByteReader(tunneled);
   await write(
     tunneled,
-    Buffer.from(["CONNECT campus.test:8080 HTTP/1.1", ...authorization, "", ""].join("\r\n")),
+    Buffer.from(["CONNECT intranet.test:8080 HTTP/1.1", ...authorization, "", ""].join("\r\n")),
   );
   assert.equal(
     (await tunneledReader.until("\r\n\r\n", 1024)).toString(),
@@ -259,8 +259,8 @@ async function exercise(): Promise<void> {
   const forwarded = connect(proxy.port, "127.0.0.1");
   const forwardedReader = new ByteReader(forwarded);
   const request = [
-    "GET http://campus.test:8080/echo?x=1 HTTP/1.1",
-    "Host: campus.test:8080",
+    "GET http://intranet.test:8080/echo?x=1 HTTP/1.1",
+    "Host: intranet.test:8080",
     ...authorization,
     "Proxy-Connection: keep-alive",
     "",
@@ -269,7 +269,7 @@ async function exercise(): Promise<void> {
   await write(forwarded, Buffer.from(request.join("\r\n")));
   assert.equal(
     (await forwardedReader.until("\r\n\r\n", 1024)).toString(),
-    "GET /echo?x=1 HTTP/1.1\r\nHost: campus.test:8080\r\nConnection: close",
+    "GET /echo?x=1 HTTP/1.1\r\nHost: intranet.test:8080\r\nConnection: close",
   );
   forwarded.end();
   assert.equal(await forwardedReader.chunk(), undefined);
@@ -278,7 +278,7 @@ async function exercise(): Promise<void> {
     const cli = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
     const child = spawn(
       process.execPath,
-      [cli, "nc", "campus.test", "8080", "--port", String(proxy.port)],
+      [cli, "nc", "intranet.test", "8080", "--port", String(proxy.port)],
       { stdio: ["pipe", "pipe", "inherit"] },
     );
     const exited = once(child, "exit");

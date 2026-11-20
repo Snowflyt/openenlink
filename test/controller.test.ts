@@ -33,7 +33,7 @@ await test("Controller signs the bytes it sends and uses the refresh token for r
   };
   const controller = new Controller("https://vpn.example.test", {
     fetch: mock,
-    userAgent: "Campus/1.0",
+    userAgent: "Example/1.0",
   });
   try {
     assert.equal(await controller.user("access"), "student");
@@ -43,7 +43,7 @@ await test("Controller signs the bytes it sends and uses the refresh token for r
     });
     assert.equal(new Headers(requests[0].options.headers).get("Authorization"), "Bearer access");
     assert.equal(requests[0].url.pathname, "/enclient/api/users/info");
-    assert.equal(new Headers(requests[0].options.headers).get("User-Agent"), "Campus/1.0");
+    assert.equal(new Headers(requests[0].options.headers).get("User-Agent"), "Example/1.0");
     assert.equal(new Headers(requests[1].options.headers).get("Authorization"), "Bearer refresh");
     assert.equal(requests[1].url.pathname, "/enclient/api/users/client/refreshToken");
     await assert.rejects(
@@ -108,7 +108,7 @@ await test("Controller recognizes expired sessions returned with HTTP 200", asyn
   }
 });
 
-await test("Gateway policy selects the internal campus DNS", () => {
+await test("Gateway policy selects the internal DNS", () => {
   const { gateways } = tunnelRules({
     gateway_list: [
       {
@@ -122,7 +122,7 @@ await test("Gateway policy selects the internal campus DNS", () => {
   assert.equal(gateways[0].dns, "10.0.0.53");
 });
 
-await test("Browser completion accepts tokens only from the configured school origin", () => {
+await test("Browser completion accepts tokens only from the configured gateway origin", () => {
   const origin = "https://vpn.example.test";
   const encoded = Buffer.from("access-token").toString("base64");
   const url = `${origin}/#/login/wxLoginLoading?accessToken=${encodeURIComponent(encoded)}&refreshToken=refresh-token`;

@@ -7,7 +7,7 @@ import { CredentialStore } from "./credentials.ts";
 
 export type Config = {
   server: string;
-  // The last school username, offered as the default at login.
+  // The last username, offered as the default at login.
   user?: string;
   userAgent?: string;
   insecureStorage?: boolean;

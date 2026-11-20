@@ -1,5 +1,5 @@
 // Baseline JPEG decoder (ITU-T T.81 sequential DCT with Huffman coding, 8-bit samples), enough to
-// draw a school's captcha in the terminal. Progressive, lossless, arithmetic-coded, 12-bit and
+// draw a sign-in captcha in the terminal. Progressive, lossless, arithmetic-coded, 12-bit and
 // CMYK images throw.
 
 export type Bitmap = { width: number; height: number; rgb: Uint8ClampedArray };

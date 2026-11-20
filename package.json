@@ -2,7 +2,7 @@
   "name": "openenlink",
   "version": "0.1.0",
   "private": true,
-  "description": "Connect to Enlink campus networks through a local SOCKS5 and HTTP proxy.",
+  "description": "Connect to Enlink VPN gateways through a local SOCKS5 and HTTP proxy.",
   "license": "AGPL-3.0-or-later",
   "author": "Ge Gao (Snowflyt) <gaoge011022@gmail.com>",
   "type": "module",

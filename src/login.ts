@@ -14,14 +14,14 @@ export class WrongPassword extends AuthenticationError {}
 
 export type SignIn = {
   credentials: Credentials;
-  // The account typed into the school's page, with that page's origin.
+  // The account typed into the sign-in page, with that page's origin.
   account?: Account & { origin: string };
-  // The school's session cookies; sent again, they sign in without the password.
+  // The sign-in page's session cookies; sent again, they sign in without the password.
   cookies: Cookie[];
 };
 
 export type LoginOptions = {
-  // Called once the school's page is recognised; nothing means the browser takes over.
+  // Called once the sign-in page is recognised; nothing means the browser takes over.
   account: (origin: string) => Promise<Account | undefined>;
   // Shows the captcha image and returns the answer; nothing means the browser takes over.
   captcha?: (image: Buffer) => Promise<string | undefined>;
@@ -37,14 +37,13 @@ export function loginTokens(url: string, origin: string, cookie?: string): Crede
   const encoded =
     location.searchParams.get("accessToken") ?? hashParam(location, "accessToken") ?? cookie;
   if (!encoded) return;
-  if (!/^[\w+/=-]+$/.test(encoded))
-    throw new Error("School returned an invalid access token encoding");
+  if (!/^[\w+/=-]+$/.test(encoded)) throw new Error("Invalid access token encoding");
   const accessToken = Buffer.from(encoded, "base64").toString();
   if (
     !accessToken ||
     Array.from(accessToken).some((char) => char.charCodeAt(0) <= 32 || char.charCodeAt(0) === 127)
   )
-    throw new Error("School returned an invalid access token");
+    throw new Error("Invalid access token");
   const refreshToken =
     location.searchParams.get("refreshToken") ?? hashParam(location, "refreshToken");
   return { accessToken, ...(refreshToken ? { refreshToken } : {}) };
@@ -61,8 +60,8 @@ function hashParam(url: URL, name: string): string | undefined {
   }
 }
 
-// Signs in from the gateway's SSO entry: through the school's page with a typed password, or
-// straight through when the school still knows the session cookies.
+// Signs in from the gateway's SSO entry: through the sign-in page with a typed password, or
+// straight through while the session cookies are still accepted.
 export async function login(entry: URL, options: LoginOptions): Promise<SignIn> {
   const web = new Web({
     ...(options.cookies ? { cookies: options.cookies } : {}),
@@ -86,7 +85,7 @@ export async function login(entry: URL, options: LoginOptions): Promise<SignIn> 
   const { adapter } = match;
   let { form } = match;
   if (form.captcha && !options.captcha)
-    throw new AuthenticationError("The school asks for a captcha; run openenlink login");
+    throw new AuthenticationError("The sign-in page asks for a captcha; run openenlink login");
   const origin = page.url.origin;
   const account = await options.account(origin);
   if (!account) throw new UnsupportedLogin("");
@@ -153,7 +152,8 @@ function gatewayTokens(url: URL, entry: URL, web: Web): Credentials | undefined 
   const state = hashParam(url, "state");
   if (state) {
     const message = gatewayMessage(state);
-    if (message !== undefined) throw new AuthenticationError(`Campus sign-in failed: ${message}`);
+    if (message !== undefined)
+      throw new AuthenticationError(`The gateway refused the sign-in: ${message}`);
   }
   const cookie = web.cookie(url, "access_token");
   return loginTokens(url.href, entry.origin, cookie && decodeURIComponent(cookie));

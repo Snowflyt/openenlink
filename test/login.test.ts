@@ -15,9 +15,9 @@ import type { Credentials, RememberedPassword } from "../src/credentials.ts";
 import { WrongPassword, login, pastedLogin } from "../src/login.ts";
 import type { LoginOptions } from "../src/login.ts";
 
-// One server plays the campus gateway at 127.0.0.1 and the school's CAS at localhost, so the
-// two keep separate cookies.
-const school = {
+// One server plays the gateway at 127.0.0.1 and the CAS sign-in page at localhost, so the two
+// keep separate cookies.
+const cas = {
   password: "right-password",
   form: "normal" as "normal" | "changed",
   captcha: false,
@@ -62,7 +62,7 @@ if (!address || typeof address === "string") throw new Error("The test server ha
 const gateway = `https://127.0.0.1:${String(address.port)}`;
 const idp = `https://localhost:${String(address.port)}`;
 const entry = new URL(`${gateway}/sso`);
-const token = base64("campus-token");
+const token = base64("access-token");
 
 function page(code = "", message = "") {
   return `<form id="login-form"></form>
@@ -72,7 +72,7 @@ function page(code = "", message = "") {
 <input class="for-form" type="hidden" name="execution" value="e1s1">
 <input type="hidden" name="_eventId" value="submit">
 <input id="x_random" type="hidden" value="">
-${school.form === "changed" ? '<input type="hidden" name="device" value="1">' : ""}
+${cas.form === "changed" ? '<input type="hidden" name="device" value="1">' : ""}
 <span id="errorcode" value="${code}"></span><span id="errormes" value="${message}"></span>`;
 }
 
@@ -91,7 +91,7 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
   const html = (status: number, body: string) => {
     response.writeHead(status, {
       "Content-Type": "text/html",
-      ...(school.captcha ? { "Set-Cookie": "SSO_X_CAPTCHA=1; Path=/" } : {}),
+      ...(cas.captcha ? { "Set-Cookie": "SSO_X_CAPTCHA=1; Path=/" } : {}),
     });
     response.end(body);
   };
@@ -99,12 +99,7 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
   if (url.hostname === "127.0.0.1") {
     if (url.pathname === "/sso") return redirect(`${idp}/sso/oauth2/authorize?state=ENLINK_OIDC`);
     const code = url.searchParams.get("code");
-    if (
-      url.pathname === "/oidc/callback" &&
-      code &&
-      !school.rejectCodes &&
-      school.codes.delete(code)
-    )
+    if (url.pathname === "/oidc/callback" && code && !cas.rejectCodes && cas.codes.delete(code))
       return redirect(
         `/enclient/#/login/wxLoginLoading?accessToken=${token}`,
         `access_token=${encodeURIComponent(token)}; Path=/`,
@@ -114,46 +109,46 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
         `/enclient/#/login/wxLoginLoading?state=${base64(JSON.stringify({ code: "400", message: "未查找到用户信息" }))}`,
       );
   } else if (url.pathname === "/sso/oauth2/authorize") {
-    if (school.sessions.has(cookies.get("LOGIN_TOKEN") ?? ""))
-      return redirect(`${gateway}/oidc/callback?code=${issue(school.codes)}&state=ENLINK_OIDC`);
+    if (cas.sessions.has(cookies.get("LOGIN_TOKEN") ?? ""))
+      return redirect(`${gateway}/oidc/callback?code=${issue(cas.codes)}&state=ENLINK_OIDC`);
     return redirect("/sso/login");
   } else if (url.pathname === "/sso/login") {
     const ticket = url.searchParams.get("ticket");
-    if (ticket && school.tickets.delete(ticket))
+    if (ticket && cas.tickets.delete(ticket))
       return redirect(
         "/sso/oauth2/authorize",
-        `LOGIN_TOKEN=${issue(school.sessions)}; Path=/sso; HttpOnly`,
+        `LOGIN_TOKEN=${issue(cas.sessions)}; Path=/sso; HttpOnly`,
       );
     return redirect(`/cas/login?service=${encodeURIComponent(new URL("/sso/login", idp).href)}`);
   } else if (url.pathname === "/cas/login" && request.method === "GET") {
-    if (school.sessions.has(cookies.get("CASTGC") ?? ""))
-      return redirect(`/sso/login?ticket=${issue(school.tickets)}`);
+    if (cas.sessions.has(cookies.get("CASTGC") ?? ""))
+      return redirect(`/sso/login?ticket=${issue(cas.tickets)}`);
     return html(200, page());
   } else if (url.pathname === "/cas/login" && request.method === "POST") {
     let text = "";
     for await (const chunk of request) text += String(chunk);
     const body = new URLSearchParams(text);
-    school.posts.push({ body, referer: request.headers.referer });
-    if (school.captcha && (body.get("captcha") !== "right" || body.get("token") !== "captcha"))
+    cas.posts.push({ body, referer: request.headers.referer });
+    if (cas.captcha && (body.get("captcha") !== "right" || body.get("token") !== "captcha"))
       return html(401, page("INVALID_CAPTCHA", "验证码错误"));
-    if (body.get("password") !== school.password)
+    if (body.get("password") !== cas.password)
       return html(401, page("INVALID_PASSWORD", "用户名或密码错误"));
     response.writeHead(302, {
-      Location: `/sso/login?ticket=${issue(school.tickets)}`,
-      "Set-Cookie": `CASTGC=${issue(school.sessions)}; Path=/cas/; Secure; HttpOnly`,
+      Location: `/sso/login?ticket=${issue(cas.tickets)}`,
+      "Set-Cookie": `CASTGC=${issue(cas.sessions)}; Path=/cas/; Secure; HttpOnly`,
     });
     return response.end();
   } else if (url.pathname === "/sso/apis/v2/open/captcha") {
     response.writeHead(200, { "Content-Type": "application/json" });
     return response.end(JSON.stringify({ img: CAPTCHA.toString("base64"), token: "captcha" }));
   }
-  school.unexpected++;
+  cas.unexpected++;
   response.writeHead(404);
   response.end();
 }
 
 function reset() {
-  Object.assign(school, {
+  Object.assign(cas, {
     password: "right-password",
     form: "normal",
     captcha: false,
@@ -161,7 +156,7 @@ function reset() {
     posts: [],
     unexpected: 0,
   });
-  school.sessions.clear();
+  cas.sessions.clear();
 }
 
 const typed =
@@ -171,11 +166,11 @@ const typed =
     return Promise.resolve({ username: "student", password: "right-password" });
   };
 
-await test("Sign in on the school page from the terminal", async () => {
+await test("Sign in on the CAS page from the terminal", async () => {
   reset();
   const origins: string[] = [];
   const result = await login(entry, { account: typed(origins) });
-  assert.deepEqual(result.credentials, { accessToken: "campus-token" });
+  assert.deepEqual(result.credentials, { accessToken: "access-token" });
   assert.deepEqual(origins, [idp]);
   assert.deepEqual(result.account, {
     origin: idp,
@@ -183,8 +178,8 @@ await test("Sign in on the school page from the terminal", async () => {
     password: "right-password",
   });
   assert.deepEqual(result.cookies.map((cookie) => cookie.name).sort(), ["CASTGC", "LOGIN_TOKEN"]);
-  assert.equal(school.posts.length, 1);
-  const [post] = school.posts;
+  assert.equal(cas.posts.length, 1);
+  const [post] = cas.posts;
   assert.deepEqual(Object.fromEntries(post.body), {
     _eventId: "submit",
     execution: "e1s1",
@@ -194,42 +189,42 @@ await test("Sign in on the school page from the terminal", async () => {
     password: "right-password",
   });
   assert.match(post.referer ?? "", /\/cas\/login\?service=/);
-  assert.equal(school.unexpected, 0);
+  assert.equal(cas.unexpected, 0);
 
   const again = await login(entry, {
     cookies: result.cookies,
     account: () => Promise.reject(new Error("The password was asked for")),
   });
-  assert.deepEqual(again.credentials, { accessToken: "campus-token" });
+  assert.deepEqual(again.credentials, { accessToken: "access-token" });
   assert.equal(again.account, undefined);
   assert.deepEqual(again.cookies.map((cookie) => cookie.name).sort(), ["CASTGC", "LOGIN_TOKEN"]);
-  assert.equal(school.posts.length, 1);
+  assert.equal(cas.posts.length, 1);
 });
 
 await test("Refuse a changed sign-in page before asking for the password", async () => {
   reset();
-  school.form = "changed";
+  cas.form = "changed";
   const origins: string[] = [];
   await assert.rejects(login(entry, { account: typed(origins) }), UnsupportedLogin);
   assert.deepEqual(origins, []);
-  assert.equal(school.posts.length, 0);
+  assert.equal(cas.posts.length, 0);
 });
 
 await test("Report a wrong password and a gateway refusal", async () => {
   reset();
-  school.password = "changed-password";
+  cas.password = "changed-password";
   await assert.rejects(login(entry, { account: typed([]) }), WrongPassword);
   reset();
-  school.rejectCodes = true;
+  cas.rejectCodes = true;
   await assert.rejects(
     login(entry, { account: typed([]) }),
-    /Campus sign-in failed: 未查找到用户信息/,
+    /The gateway refused the sign-in: 未查找到用户信息/,
   );
 });
 
 await test("Ask for the captcha again after a wrong answer", async () => {
   reset();
-  school.captcha = true;
+  cas.captcha = true;
   const images: Buffer[] = [];
   const answers = ["wrong", "right"];
   const result = await login(entry, {
@@ -239,10 +234,10 @@ await test("Ask for the captcha again after a wrong answer", async () => {
       return Promise.resolve(answers.shift());
     },
   });
-  assert.deepEqual(result.credentials, { accessToken: "campus-token" });
+  assert.deepEqual(result.credentials, { accessToken: "access-token" });
   assert.deepEqual(images, [CAPTCHA, CAPTCHA]);
   assert.deepEqual(
-    school.posts.map(({ body }) => [body.get("captcha"), body.get("token")]),
+    cas.posts.map(({ body }) => [body.get("captcha"), body.get("token")]),
     [
       ["wrong", "captcha"],
       ["right", "captcha"],
@@ -250,7 +245,7 @@ await test("Ask for the captcha again after a wrong answer", async () => {
   );
 
   reset();
-  school.captcha = true;
+  cas.captcha = true;
   const origins: string[] = [];
   await assert.rejects(login(entry, { account: typed(origins) }), /asks for a captcha/);
   assert.deepEqual(origins, []);
@@ -262,7 +257,7 @@ await test("Ask for the captcha again after a wrong answer", async () => {
 
 await test("Read what a browser sign-in left behind", async () => {
   reset();
-  const expected = { accessToken: "campus-token" };
+  const expected = { accessToken: "access-token" };
   assert.deepEqual(await pastedLogin(` ${token}\n`, entry), expected);
   assert.deepEqual(await pastedLogin(`access_token=${encodeURIComponent(token)}`, entry), expected);
   assert.deepEqual(
@@ -277,7 +272,7 @@ await test("Read what a browser sign-in left behind", async () => {
     ),
     { accessToken: "token>>>" },
   );
-  const code = issue(school.codes);
+  const code = issue(cas.codes);
   assert.deepEqual(
     await pastedLogin(`${gateway}/oidc/callback?code=${code}&state=ENLINK_OIDC`, entry),
     expected,
@@ -287,10 +282,10 @@ await test("Read what a browser sign-in left behind", async () => {
     /not on 127\.0\.0\.1/,
   );
   await assert.rejects(pastedLogin(`${gateway}/enclient/`, entry), /no sign-in result/);
-  await assert.rejects(pastedLogin("not a token", entry), /invalid access token encoding/);
+  await assert.rejects(pastedLogin("not a token", entry), /Invalid access token encoding/);
 });
 
-await test("Renew an expired session with the school's cookies, then the password", async (t) => {
+await test("Renew an expired session with the session cookies, then the password", async (t) => {
   reset();
   const { cookies } = await login(entry, { account: typed([]) });
   let remembered: RememberedPassword | undefined = {
@@ -328,34 +323,34 @@ await test("Renew an expired session with the school's cookies, then the passwor
   const run = () =>
     serve({ server: "https://vpn.example.test" }, { port: 1088 }, new AbortController().signal);
 
-  school.posts = [];
+  cas.posts = [];
   await assert.rejects(run(), /Mock authorization complete/);
-  assert.deepEqual(saved, [{ accessToken: "campus-token" }]);
-  assert.equal(school.posts.length, 0);
+  assert.deepEqual(saved, [{ accessToken: "access-token" }]);
+  assert.equal(cas.posts.length, 0);
 
-  school.sessions.clear();
+  cas.sessions.clear();
   await assert.rejects(run(), /Mock authorization complete/);
-  assert.equal(school.posts.length, 1);
+  assert.equal(cas.posts.length, 1);
   assert.equal(remembered.lastAttemptAt, undefined);
   assert.deepEqual(remembered.cookies?.map((cookie) => cookie.name).sort(), [
     "CASTGC",
     "LOGIN_TOKEN",
   ]);
 
-  school.sessions.clear();
+  cas.sessions.clear();
   remembered = { ...remembered, lastAttemptAt: Date.now() };
   await assert.rejects(run(), /retry after five minutes/);
-  assert.equal(school.posts.length, 1);
+  assert.equal(cas.posts.length, 1);
 
   remembered = { ...remembered, lastAttemptAt: 0 };
-  school.password = "changed-password";
+  cas.password = "changed-password";
   await assert.rejects(run(), /the remembered password was removed/);
-  assert.equal(school.posts.length, 2);
+  assert.equal(cas.posts.length, 2);
   assert.equal(remembered, undefined);
 
   remembered = { origin: "https://elsewhere.test", username: "student", password: "x" };
   await assert.rejects(run(), /moved to another site/);
-  assert.equal(school.posts.length, 2);
+  assert.equal(cas.posts.length, 2);
 });
 
 server.closeAllConnections();

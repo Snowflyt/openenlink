@@ -107,21 +107,21 @@ export class Controller {
     const response = await this.fetch(url, options).catch((error: unknown) => {
       throw requestFailure(url, error);
     });
-    if (response.status === 401) throw new AuthenticationError("Campus authorization expired");
+    if (response.status === 401) throw new AuthenticationError("Authorization expired");
     if (!response.ok)
       throw new Error(
-        `Campus controller ${options.method} ${url.pathname} returned HTTP ${response.status}`,
+        `Controller ${options.method} ${url.pathname} returned HTTP ${response.status}`,
       );
 
     const result = object(await response.json());
     if (result.code === "401" || result.code === "3010")
-      throw new AuthenticationError("Campus authorization expired");
+      throw new AuthenticationError("Authorization expired");
     if (result.code !== "200") {
       const code =
         typeof result.code === "string" && /^[\w-]{1,32}$/.test(result.code) ?
           result.code
         : "invalid";
-      throw new PolicyError(`Campus controller rejected ${url.pathname}, code ${code}`);
+      throw new PolicyError(`Controller rejected ${url.pathname}, code ${code}`);
     }
     return object(result.data);
   }
@@ -190,7 +190,7 @@ export function tunnelRules(rules: Record<string, unknown>): {
     const host = endpoint.hostname.replace(/^\[|\]$/g, "");
     const dns =
       gateway.internalDnsResolveStatus === "true" ?
-        ipv4Address(text(gateway.dns, "campus DNS"))
+        ipv4Address(text(gateway.dns, "internal DNS"))
       : undefined;
     return { host, port: Number(endpoint.port || 443), ...(dns ? { dns } : {}) };
   });
