@@ -6,7 +6,7 @@ Tested with Soochow University's OIDC login, campus websites and SSH. Servers re
 
 ## Run
 
-Each [release](https://github.com/Snowflyt/openenlink/releases) carries a single executable for macOS (arm64), Linux (x64, arm64; `-gnu` for glibc distributions, `-musl` for Alpine) and Windows (x64), named after its platform. Rename it to `openenlink` (`openenlink.exe` on Windows), run `chmod +x openenlink` on macOS and Linux, then `openenlink login https://wvpn.suda.edu.cn` and `openenlink serve`. macOS rejects a file downloaded through a browser until `xattr -d com.apple.quarantine openenlink` clears the flag. The examples below run from source with `npm start --`; the executable takes the same arguments.
+Each [release](https://github.com/Snowflyt/openenlink/releases) carries a single executable for macOS (arm64), Linux (x64, arm64; `-gnu` for glibc distributions, `-musl` for Alpine) and Windows (x64), named after its platform. Rename it to `openenlink` (`openenlink.exe` on Windows), run `chmod +x openenlink` on macOS and Linux, then `openenlink login https://wvpn.suda.edu.cn` and `openenlink serve`. macOS rejects a file downloaded through a browser until `xattr -d com.apple.quarantine openenlink` clears the flag. The Linux executables load the GCC runtime libraries, which slim container images leave out: install `libatomic1` on Debian and Ubuntu, or `libstdc++` on Alpine, plus `libatomic` for x64. The examples below run from source with `npm start --`; the executable takes the same arguments.
 
 To run from source, install Node.js 26.9 or newer, Git and curl, then:
 
