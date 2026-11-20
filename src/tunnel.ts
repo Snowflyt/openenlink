@@ -69,7 +69,7 @@ export class Tunnel {
         },
       });
       const nic = await stack.interfaces.createTun({ ip: `${addresses.ipv4}/0` });
-      socket.setTimeout(30_000);
+      socket.setTimeout(0);
       const tunnel = new Tunnel(socket, addresses, stack);
       tunnel.done = tunnel.run(nic, reader);
       return tunnel;
@@ -85,9 +85,16 @@ export class Tunnel {
     const outgoing = nic.readable.getReader();
     let counter = 0;
     let heartbeatPending = false;
+    let received = Date.now();
 
     const heartbeat = setInterval(() => {
-      if (heartbeatPending || signal.aborted) return;
+      if (signal.aborted) return;
+      // A socket idle timer restarts on our own heartbeats, so the gateway's silence is timed here.
+      if (Date.now() - received > 30_000) {
+        this.close(new Error("Campus gateway sent nothing for 30 seconds"));
+        return;
+      }
+      if (heartbeatPending) return;
       const body = Buffer.alloc(4);
       body.writeUInt32LE(counter++ >>> 0);
       heartbeatPending = true;
@@ -109,6 +116,7 @@ export class Tunnel {
     const receive = async () => {
       while (!signal.aborted) {
         const packet = await readPacket(reader);
+        received = Date.now();
         if (packet.kind === 4) {
           await writer.write(rewriteAddress(packet.body, 12, this.addresses.dns, this.dnsServer));
         }
