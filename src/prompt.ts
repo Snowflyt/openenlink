@@ -9,8 +9,9 @@ function stty(mode: string): void {
 }
 
 async function question(prompt: string, options: { echo: boolean; lineMode: boolean }) {
-  process.stderr.write(prompt);
-  // In raw mode readline echoes typed characters to its output; discard them unless asked.
+  // In raw mode readline redraws its line and echoes typed characters to its output. A hidden
+  // answer discards that output, so its prompt is written here.
+  if (!options.echo) process.stderr.write(prompt);
   const output =
     options.echo ? process.stderr : new Writable({ write: (_chunk, _encoding, done) => done() });
   const input = createInterface({
@@ -25,7 +26,7 @@ async function question(prompt: string, options: { echo: boolean; lineMode: bool
   process.once("SIGINT", interrupt);
   if (options.lineMode) stty("-echo");
   try {
-    return await input.question("", { signal: cancel.signal });
+    return await input.question(options.echo ? prompt : "", { signal: cancel.signal });
   } finally {
     if (options.lineMode) stty("echo");
     process.off("SIGINT", interrupt);
