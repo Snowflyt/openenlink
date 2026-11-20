@@ -25,7 +25,7 @@ The authorization stays on this machine until `openenlink logout`. How you sign 
 
 ### In the terminal
 
-On a sign-in page with an [adapter](../README.md#adapters), `login` asks for the username and password and posts them to that page over HTTPS. The username prompt offers the last one used; `--user name` answers it in advance. After a wrong password, `login` asks again, three attempts in all.
+On a sign-in page with an [adapter](../README.md#adapters), `login` asks for the username and password and posts them to that page over HTTPS. The username prompt offers the last one used, and Enter accepts it; `--user name` answers it in advance. Nothing appears while the password is typed. After a wrong password, `login` asks again, three attempts in all.
 
 When the page asks for a captcha, `login` draws the image in the terminal and asks for the answer. A terminal without image or true-color support gets the image as a temporary file, with its path printed.
 

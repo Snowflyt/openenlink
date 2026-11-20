@@ -33,20 +33,29 @@ async function signIn(entry: URL, config: Config, user?: string): Promise<SignIn
       return await login(entry, {
         ...(config.userAgent ? { userAgent: config.userAgent } : {}),
         account: async (origin) => {
-          console.log(`Sign-in page: ${origin}`);
-          if (user === undefined || attempt > 1) {
+          const host = new URL(origin).host;
+          if (user && attempt === 1) {
+            console.log(`Type the password for ${user} at ${host} below.`);
+          } else {
+            if (attempt === 1) {
+              console.log(`Type your ${host} username and password below.`);
+              if (!username)
+                console.log("Leave the username empty to sign in with a browser instead.");
+            }
             const typed = await ask(
-              username ? `Username [${username}]: ` : "Username (empty to use a browser): ",
+              username ? `Username (press Enter for ${username}): ` : "Username: ",
             );
             username = typed || username;
           }
           if (!username) return;
-          return { username, password: await askSecret("Password: ") };
+          return { username, password: await askSecret("Password (hidden): ") };
         },
         captcha: async (image) => {
           const cleanup = await showImage(image);
           try {
-            return await ask("Captcha (empty to use a browser): ");
+            return await ask(
+              "Type the characters in the image (press Enter alone to use a browser): ",
+            );
           } finally {
             await cleanup();
           }
