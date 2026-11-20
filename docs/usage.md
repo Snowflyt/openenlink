@@ -3,8 +3,8 @@
 English | [简体中文](usage.zh-CN.md)
 
 ```text
-openenlink login [https://vpn.example.edu] [--user name] [--remember] [--insecure-storage]
-                 [--user-agent text]
+openenlink login [https://vpn.example.edu] [--user name] [--remember] [--browser]
+                 [--insecure-storage] [--user-agent text]
 openenlink serve [--port 1088] [--proxy-user name]
 openenlink nc host port [--port 1088]
 openenlink status
@@ -31,7 +31,11 @@ When the page asks for a captcha, `login` draws the image in the terminal and as
 
 ### In a browser
 
-On any other sign-in page, `login` prints the gateway's sign-in address. An empty username or captcha answer does the same on a page with an adapter.
+```sh
+openenlink login --browser
+```
+
+`login --browser` prints the gateway's sign-in address. Without the option, `login` does the same on a sign-in page without an adapter, and after an empty answer at the first username prompt or at the captcha prompt.
 
 1. Open the printed address in a browser and sign in.
 2. Copy the address the browser ends on.
@@ -53,7 +57,7 @@ openenlink login --remember
 - A captcha stops the automatic sign-in; run `openenlink login --remember` again.
 - A later `login` without `--remember` removes the remembered password.
 
-`--remember` needs a terminal sign-in. A browser sign-in leaves no password to save.
+`--remember` needs a terminal sign-in. A browser sign-in leaves no password to save, so `--browser` refuses `--remember`.
 
 ### Other sign-in options
 

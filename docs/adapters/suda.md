@@ -23,7 +23,7 @@ curl --proxy http://127.0.0.1:1088 "http://file.suda.edu.cn/defaultroot/SInformA
 | Username and password | Supported.                                                                 |
 | Captcha               | Supported. `login` shows the image and takes up to three answers.          |
 | `--remember`          | Supported. Keeps the `CASTGC` and `LOGIN_TOKEN` cookies with the password. |
-| Other sign-in methods | Leave the username empty and finish in a browser.                          |
+| Other sign-in methods | Run `openenlink login --browser` and finish in a browser.                  |
 
 The gateway issues no refresh token. Without `--remember`, `serve` exits with status 3 when the authorization expires, and you run `openenlink login` again. With `--remember`, `serve` signs in again by itself.
 

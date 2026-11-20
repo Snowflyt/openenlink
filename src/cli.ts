@@ -13,8 +13,8 @@ import { nc } from "./nc.ts";
 import { ask, askPaste, askSecret } from "./prompt.ts";
 
 const USAGE = `Usage:
-  openenlink login [https://vpn.example.edu] [--user name] [--remember] [--insecure-storage]
-                   [--user-agent text]
+  openenlink login [https://vpn.example.edu] [--user name] [--remember] [--browser]
+                   [--insecure-storage] [--user-agent text]
   openenlink serve [--port 1088] [--proxy-user name]
   openenlink nc host port [--port 1088]
   openenlink status
@@ -25,7 +25,7 @@ const PASSWORD_ATTEMPTS = 3;
 class UsageError extends Error {}
 
 // Signs in on the sign-in page from the terminal; a page without an adapter, or an empty
-// username or captcha, moves the sign-in to a browser.
+// username or captcha, moves the sign-in to a browser. login --browser starts there.
 async function signIn(entry: URL, config: Config, user?: string): Promise<SignIn> {
   let username = user ?? config.user;
   for (let attempt = 1; ; attempt++) {
@@ -92,6 +92,7 @@ async function main(): Promise<void> {
       allowPositionals: true,
       args,
       options: {
+        browser: { type: "boolean" },
         "insecure-storage": { type: "boolean" },
         remember: { type: "boolean" },
         user: { type: "string" },
@@ -99,6 +100,8 @@ async function main(): Promise<void> {
       },
     });
     if (positionals.length > 1) throw new UsageError("login takes one gateway address");
+    if (values.browser && (values.user !== undefined || values.remember))
+      throw new UsageError("--browser signs in without --user or --remember");
     const previous = await loadConfig();
     const server = positionals[0] ?? previous?.server;
     if (!server) throw new UsageError("login needs the gateway address");
@@ -117,7 +120,10 @@ async function main(): Promise<void> {
     try {
       const entry = await controller.loginUrl();
       if (values.remember) console.log(`The username and password will be kept in ${where}.`);
-      const { account, cookies, credentials } = await signIn(entry, config, values.user);
+      const { account, cookies, credentials }: SignIn =
+        values.browser ?
+          { credentials: await browserSignIn(entry, config.userAgent), cookies: [] }
+        : await signIn(entry, config, values.user);
       await store.save(credentials);
       if (values.remember && account) await store.savePassword({ ...account, cookies });
       else await store.clearPassword();

@@ -3,8 +3,8 @@
 [English](usage.md) | 简体中文
 
 ```text
-openenlink login [https://vpn.example.edu] [--user name] [--remember] [--insecure-storage]
-                 [--user-agent text]
+openenlink login [https://vpn.example.edu] [--user name] [--remember] [--browser]
+                 [--insecure-storage] [--user-agent text]
 openenlink serve [--port 1088] [--proxy-user name]
 openenlink nc host port [--port 1088]
 openenlink status
@@ -31,7 +31,11 @@ openenlink login https://vpn.example.edu
 
 ### 在浏览器里登录
 
-其他登录页，`login` 打印网关的登录地址。在有适配器的登录页上，用户名或验证码留空也会转到浏览器登录。
+```sh
+openenlink login --browser
+```
+
+`login --browser` 打印网关的登录地址。不带该选项时，登录页没有适配器，或者第一次询问用户名时留空、验证码留空，`login` 也会这样做。
 
 1. 在浏览器里打开打印出的地址并登录。
 2. 复制浏览器最后停留的地址。
@@ -53,7 +57,7 @@ openenlink login --remember
 - 遇到验证码时自动登录停止，需要重新执行 `openenlink login --remember`。
 - 之后不带 `--remember` 的 `login` 会删除已保存的密码。
 
-`--remember` 需要终端登录。浏览器登录不留下可以保存的密码。
+`--remember` 需要终端登录。浏览器登录不留下可以保存的密码，所以 `--browser` 不能和 `--remember` 一起用。
 
 ### 其他登录选项
 

@@ -23,7 +23,7 @@ curl --proxy http://127.0.0.1:1088 "http://file.suda.edu.cn/defaultroot/SInformA
 | 用户名和密码 | 支持。                                                       |
 | 验证码       | 支持。`login` 显示图片，最多接受三次回答。                   |
 | `--remember` | 支持。`CASTGC` 和 `LOGIN_TOKEN` 两个 cookie 与密码一起保存。 |
-| 其他登录方式 | 用户名留空，转到浏览器里完成。                               |
+| 其他登录方式 | 执行 `openenlink login --browser`，在浏览器里完成。          |
 
 该网关不发放 refresh token。不带 `--remember` 时，授权过期后 `serve` 以状态 3 退出，需要重新执行 `openenlink login`。带 `--remember` 时，`serve` 自己重新登录。
 
