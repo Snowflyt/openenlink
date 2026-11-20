@@ -1,78 +1,73 @@
 # openenlink
 
-A TypeScript client for Enlink campus networks. It provides a local SOCKS5 and HTTP proxy using a TLS tunnel and [lwIP compiled to WebAssembly](https://github.com/chipmk/tcpip.js).
+English | [简体中文](README.zh-CN.md)
 
-Tested with Soochow University's OIDC login, campus websites and SSH. Servers requiring SPA are reported as unsupported.
+An open-source client for Enlink gateways, the ones the EnAgent and EnUES apps connect to. It signs in from the terminal and opens a local SOCKS5 and HTTP proxy into the network behind the gateway. System routes and DNS settings stay as they are.
 
-## Run
+## Install
 
-Each [release](https://github.com/Snowflyt/openenlink/releases) carries a single executable for macOS (arm64), Linux (x64, arm64; `-gnu` for glibc distributions, `-musl` for Alpine) and Windows (x64), named after its platform. Rename it to `openenlink` (`openenlink.exe` on Windows), run `chmod +x openenlink` on macOS and Linux, then `openenlink login https://wvpn.suda.edu.cn` and `openenlink serve`. macOS rejects a file downloaded through a browser until `xattr -d com.apple.quarantine openenlink` clears the flag. The Linux executables load the GCC runtime libraries, which slim container images leave out: install `libatomic1` on Debian and Ubuntu, or `libstdc++` on Alpine, plus `libatomic` for x64. The examples below run from source with `npm start --`; the executable takes the same arguments.
+Download the file for your system. Each link fetches it from the [latest release](https://github.com/Snowflyt/openenlink/releases/latest).
 
-To run from source, install Node.js 26.9 or newer, Git and curl, then:
+| System               | File                                                                                                                         |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Windows x64          | [`openenlink-windows-x64.exe`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-windows-x64.exe)   |
+| macOS, Apple silicon | [`openenlink-darwin-arm64`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-darwin-arm64)         |
+| Linux x64            | [`openenlink-linux-x64-gnu`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-x64-gnu)       |
+| Linux arm64          | [`openenlink-linux-arm64-gnu`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-arm64-gnu)   |
+| Alpine Linux x64     | [`openenlink-linux-x64-musl`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-x64-musl)     |
+| Alpine Linux arm64   | [`openenlink-linux-arm64-musl`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-arm64-musl) |
 
-```sh
-git clone --recursive https://github.com/Snowflyt/openenlink.git
-cd openenlink
-npm install
-npm start -- login https://wvpn.suda.edu.cn
-npm start -- serve
-```
-
-Login signs in on the school's SSO page from the terminal. It asks for the school username, offering the last one as the default (`--user name` skips the question), and the password. When the school asks for a captcha, it shows the image with iTerm2 inline images (iTerm2, WezTerm, Konsole), the kitty graphics protocol, sixel or colored half blocks; other terminals get a private temporary file whose path is printed. The client keeps authorization in the OS credential store until `logout`. Close other clients using the same campus account before logging in.
-
-Terminal sign-in knows Soochow University's CAS page. On any other school page, or after an empty username or captcha answer, login prints the gateway's sign-in address to open in a browser. When the browser finishes, paste the address it ends on, or the value of the gateway's `access_token` cookie from the developer tools.
-
-Use `login --remember` to save a CAS username and password in the OS credential store, along with the school's session cookies. When a campus session ends, the client signs in again with those cookies, and with the password once they expire. The password is posted only to the HTTPS origin where it was typed. A failed sign-in waits five minutes before another attempt, a wrong password removes the remembered one, and a captcha needs `login --remember` again. `logout` removes both the authorization and remembered password.
-
-School sign-in trusts the certificates Node.js trusts. For a school behind a private certificate authority, set `NODE_EXTRA_CA_CERTS=/path/to/ca.pem`.
-
-The proxy listens on `127.0.0.1:1088` while `serve` runs; `serve --port` chooses another port. The port accepts SOCKS5 (CONNECT and UDP ASSOCIATE over IPv4) and HTTP proxy requests, including CONNECT. Destination DNS queries use the campus resolver inside the tunnel, so SOCKS clients should resolve names through the proxy. For example:
+Rename the file to `openenlink`, or `openenlink.exe` on Windows. On macOS and Linux, make it executable:
 
 ```sh
-curl --socks5-hostname 127.0.0.1:1088 https://its.suda.edu.cn/
-curl --proxy http://127.0.0.1:1088 https://its.suda.edu.cn/
+chmod +x openenlink
 ```
 
-Tools that read `http_proxy` and `https_proxy`, such as git and pip, can use `http://127.0.0.1:1088`.
-
-`nc host port` joins standard input and output to a campus host through the running proxy, which suits SSH on any system, including Windows. It takes `--port` when `serve` uses another port and works with a proxy started without `--proxy-user`. In `~/.ssh/config`:
-
-```
-Host *.suda.edu.cn
-  ProxyCommand /path/to/openenlink nc %h %p
-```
-
-From source, the command is `node /path/to/openenlink/src/cli.ts nc %h %p`.
-
-On a shared machine, other accounts can reach the same local port. `serve --proxy-user name` reads a password from the terminal, or one line from standard input, and makes the proxy require it through SOCKS5 username/password or HTTP Basic proxy authentication. Clients then connect with `socks5h://name:password@127.0.0.1:1088` or `http://name:password@127.0.0.1:1088`.
-
-Controller requests carry Node.js's default User-Agent. `login --user-agent text` replaces it for gateways that filter clients, and `--user-agent ""` restores the default.
-
-The client leaves system routes and DNS settings unchanged. IPv6 requests receive an unsupported-address response.
+macOS blocks a file downloaded through a browser until its quarantine flag is cleared:
 
 ```sh
-npm start -- status
-npm start -- logout
+xattr -d com.apple.quarantine openenlink
 ```
 
-`logout` removes this client's saved authorization. Commands exit with status 2 on usage errors and 3 when someone needs to run `login`, so a script that restarts `serve` can stop at 3. `Ctrl+C` stops the proxy. After a dropped tunnel, the client retries with a delay of up to 30 seconds. It renews expired access tokens with a refresh token or remembered password. Run `login` when credentials expire or the school requests verification.
+Slim Linux container images leave out libraries the executable loads. Install `libatomic1` on Debian and Ubuntu. On Alpine, install `libstdc++`, and `libatomic` as well on x64.
 
-Settings are saved in `$XDG_CONFIG_HOME/openenlink/config.json` (`~/.config/openenlink/config.json` when it is unset), or `%APPDATA%\openenlink\config.json` on Windows. Authorization stays in the OS credential store. Linux needs libsecret and a Secret Service such as GNOME Keyring or KWallet.
+Other systems, Intel Macs included, [run from source](docs/building.md).
 
-Hosts without a credential store, such as Docker containers and servers without a desktop session, can use `login --insecure-storage`. It keeps the authorization and any remembered password as plain JSON in `credentials.json` next to `config.json`, readable only by its owner. Each `login` chooses again: a later `login` without the flag returns to the OS credential store and removes the copy in the file.
-
-## Development
+## Get started
 
 ```sh
-npm test
-npm run typecheck
-npm run lint
+openenlink login https://vpn.example.edu
+openenlink serve
+curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
 ```
 
-Tests cover a local TLS gateway, certificate rejection, SOCKS TCP/UDP, HTTP CONNECT and request forwarding, `nc`, compressed and loopback DNS replies, connection half-close, TCP under packet loss and reordering, controller signing, terminal sign-in against a local school page (session cookies, captcha retries, a changed page, wrong passwords, gateway errors, pasted results, renewal in `serve`), JPEG decoding against libjpeg and terminal image output. Each tunnel runs in a worker so disconnecting releases its WASM memory and timers.
+`login` takes the address of your gateway and saves the authorization on this machine. `serve` keeps running and listens on `127.0.0.1:1088` for SOCKS5 and HTTP proxy requests. The third command, in another terminal, fetches an internal page through the proxy.
 
-`npm install` builds `tcpip` 0.4.0 from the `vendor/tcpip.js` submodule with `vendor/tcpip.js.patch` applied. The JavaScript fixes keep the write side open after a peer FIN and free packet buffers copied into WASM memory. The WASM, compiled from `vendor/lwip` (lwIP 2.2.0), delivers every pbuf of out-of-order data, sends chained outgoing packets whole and copies incoming packets before lwIP queues them. A connection that the peer resets or lwIP aborts rejects its pending connect and errors its streams. Without these, one lost packet could stall or corrupt a connection. It also uses a 182 KiB window with window scaling instead of 5.6 KiB, and a 1 s initial retransmission timeout instead of 3 s. The first install downloads wasi-sdk 24 into `.cache` to compile it. After changing the submodule, `git -C vendor/tcpip.js diff > vendor/tcpip.js.patch` saves the patch and `npm install` rebuilds. That dependency is pinned until the fixes are available upstream.
+[Usage](docs/usage.md) covers every command and option, including SSH through `openenlink nc`.
 
-`npm run build` writes a single executable for the current platform to `dist/openenlink`, or `dist/openenlink.exe` on Windows. The build strips the types from `src` with ts-blank-space, leaving the JavaScript line for line as written, and the executable carries that with the runtime dependencies and `tcpip.wasm` in its virtual file system, and they run from there without unpacking. The virtual file system needs Node.js 27.0.0-alpha.0.1.1 or newer from [nodejs.org](https://nodejs.org/), so with an older Node.js the build downloads that release into `dist` first. Node.js 27 no longer ships for Intel Macs, so they run from source. Pushing a `v*` tag builds every platform in GitHub Actions and attaches them to a release.
+## Adapters
 
-Protocol details are in [docs/protocol.md](docs/protocol.md).
+An adapter lets `login` ask for the username and password in the terminal and post them to the sign-in page itself.
+
+| Adapter            | Gateway                    | Terminal sign-in                             | Guide                                          |
+| ------------------ | -------------------------- | -------------------------------------------- | ---------------------------------------------- |
+| Soochow University | `https://wvpn.suda.edu.cn` | Username and password, captcha, `--remember` | [docs/adapters/suda.md](docs/adapters/suda.md) |
+
+Other Enlink gateways that offer OIDC single sign-on work through a browser: `login` prints the address to open, and you paste the address the browser ends on. Gateways that require SPA are unsupported.
+
+## Documentation
+
+- [Usage](docs/usage.md): commands, options, credential storage and exit statuses.
+- [Soochow University](docs/adapters/suda.md): the gateway and sign-in page of the one adapter so far.
+- [Contributing](CONTRIBUTING.md): setup, checks, commit format and pull requests.
+- [Writing an adapter](docs/adapters/README.md): terminal sign-in for another sign-in page.
+- [Protocol](docs/protocol.md): the Enlink controller API and tunnel frames.
+- [Building](docs/building.md): running from source, the patched TCP/IP stack and the single executable.
+
+## Acknowledgements
+
+The protocol behavior of [mihomo-smart-enagent](https://github.com/airline233/mihomo-smart-enagent) informed this independent implementation. The TCP/IP stack inside the tunnel is [tcpip.js](https://github.com/chipmk/tcpip.js), which runs [lwIP](https://savannah.nongnu.org/projects/lwip/) compiled to WebAssembly.
+
+## License
+
+[AGPL-3.0-or-later](LICENSE)

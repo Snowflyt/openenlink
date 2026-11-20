@@ -1,16 +1,16 @@
-# Protocol notes
+# Enlink protocol
 
-The protocol behavior of [mihomo-smart-enagent](https://github.com/airline233/mihomo-smart-enagent) informed this independent implementation.
+An Enlink deployment has a controller, which serves an HTTPS API on the gateway address, and one or more gateways, which carry IP packets over TLS. This document describes both as openenlink speaks them. A sign-in page behind the controller is described in its [adapter guide](adapters/README.md).
 
-## Authentication
+## Sign-in
 
-Soochow University advertises OIDC through `POST /enclient/api/users/custom/page/login/cfg/select`. The client uses the advertised `/enclient/api/users/admin/custom/page/login/sso/OIDC` entry. Its registered OIDC callback remains on the university VPN server. The `OIDC-UES?blankwindow=blank` variant hands authentication to the native app and can create a competing session.
+`POST /enclient/api/users/custom/page/login/cfg/select` with an empty JSON object lists the sign-in methods in `ssoLoginTypes`. The client takes the entry whose `loginType` is `SSO_OIDC` and follows its `loginUrl`, such as `/enclient/api/users/admin/custom/page/login/sso/OIDC`. The `OIDC-UES?blankwindow=blank` variant of that address hands the sign-in to the official app and can start a competing session.
 
-The entry redirects to the school's identity platform at `auth.suda.edu.cn`: `/sso/oauth2/authorize`, then `/sso/login`, then the CAS page `/cas/login`. The page's script copies its hidden `.for-form` fields into `#login-form`, leaves out `pid` and posts `_eventId`, `execution`, `lt`, `source`, `username` and `password` to `/cas/login`. Success sets `CASTGC` (Path `/cas/`), returns a ticket to `/sso/login`, which sets `LOGIN_TOKEN` (Path `/sso`), and goes back through authorize to the gateway's `/oidc/callback?code=…`. Either cookie later signs in again without the password. While an `X_CAPTCHA` cookie is present the form also carries `captcha` and `token`; `GET /sso/apis/v2/open/captcha?imageWidth=100` returns the Base64 JPEG image and its token. A failed post returns the page with codes such as `INVALID_PASSWORD` or `INVALID_CAPTCHA` in `#errorcode` and the message in `#errormes`.
+The entry redirects to the organization's sign-in page. After a successful sign-in, the browser returns to the controller's `/oidc/callback?code=…`, which redirects to the completion page `/login/wxLoginLoading`. That address carries a Base64 `accessToken` parameter, in its query or in the query after the `#`, or the response sets an `access_token` cookie. A `refreshToken` parameter may come with it. The client follows every redirect itself and stops at the completion address without requesting it.
 
-The callback redirects to the completion page `/login/wxLoginLoading`, which reads a Base64 `accessToken` query parameter or `access_token` cookie, plus a possible `refreshToken`. The client follows every redirect itself and stops at this address without requesting it, so the page never launches the native app. A refused callback lands on the same page with `state`, Base64 JSON carrying `code` and `message`, for example `未查找到用户信息`.
+A refused callback lands on the same page with a `state` parameter: Base64 JSON with `code` and `message`.
 
-Authenticated controller calls:
+## Controller API
 
 | Endpoint                                      | Result                                                                   |
 | --------------------------------------------- | ------------------------------------------------------------------------ |
@@ -18,9 +18,11 @@ Authenticated controller calls:
 | `GET /enclient/api/users/terminal/rules`      | `data.token` is the tunnel token; `gateway_list` supplies endpoints.     |
 | `GET /enclient/api/users/client/refreshToken` | Refresh-token Bearer authentication; returns `token` and `refreshToken`. |
 
-Responses wrap results in `{code:"200",data:...}`. Expired authorization can return HTTP 200 with code `"3010"`. Each gateway's `ip` field encodes `publicHost:port||internalAddress||internalPort`. When `internalDnsResolveStatus` is `"true"`, its `dns` field overrides the DNS address in the data-channel handshake.
+Responses wrap results in `{code:"200",data:...}`. An expired authorization returns HTTP 401, or HTTP 200 with code `"401"` or `"3010"`.
 
-Browser request signing uses headers `now`, `requestId`, `finger` and `Authorization`. `now` is Unix milliseconds. `requestId` contains 16 random characters from `qwertyuiopasdfghjklzxcvbnm1234567890`. The checksum is:
+Each gateway's `ip` field encodes `publicHost:port||internalAddress||internalPort`. When `internalDnsResolveStatus` is `"true"`, its `dns` field overrides the DNS address in the data-channel handshake.
+
+Every request carries the headers `now`, `requestId`, `finger` and `Authorization`. `now` is Unix milliseconds. `requestId` contains 16 random characters from `qwertyuiopasdfghjklzxcvbnm1234567890`. The checksum is:
 
 ```text
 R = raw query + exact JSON body, when present
@@ -36,17 +38,19 @@ Client frames have a 12-byte header: magic `01`, type, big-endian total length, 
 
 Authentication contains tagged username and tunnel-token strings followed by `FF`. The response uses a 12-byte header with success byte 8 equal to 1 and a zero status code at bytes 10–11. Address fields use a one-byte tag, two-byte big-endian length and value. Tag `0B` is the four-byte IPv4 address; `24` is textual DNS; `35` is a 16-byte IPv6 address.
 
-Subsequent gateway frames use an 8-byte header. Type 2 is control traffic; type 4 carries IPv4. The client emits a heartbeat every 500 milliseconds.
+Subsequent gateway frames use an 8-byte header. Type 2 is control traffic; type 4 carries IPv4. The client emits a heartbeat every 500 milliseconds and ends a tunnel whose gateway sends nothing for 30 seconds.
 
-lwIP treats `127/8` as local. For a loopback campus resolver, the client uses an internal RFC 2544 alias and translates IPv4 addresses and checksums at the TLS boundary. Both resolver forms have end-to-end tests.
+## DNS
 
-The proxy's resolver sends UDP queries through the virtual stack and decodes replies with `dns-packet`. The DNS decoder bundled with `tcpip` cannot handle the compressed names in the live gateway's replies. DNS answers can map campus hostnames to virtual `192.19.*` addresses, so substituting public DNS breaks those resources. Truncated DNS replies are reported; DNS over TCP and IPv6 transport are unimplemented.
+The proxy's resolver sends UDP queries through the tunnel to the resolver from the handshake and decodes replies with `dns-packet`, which handles the compressed names gateways send. Answers can map internal host names to virtual `192.19.*` addresses that exist only inside the tunnel, so a public resolver cannot replace it. Truncated replies are reported; DNS over TCP and IPv6 transport are unimplemented.
+
+lwIP treats `127/8` as local. For a resolver at a loopback address, the client uses an internal RFC 2544 alias and translates IPv4 addresses and checksums at the TLS boundary.
 
 ## SPA
 
-SPA is unimplemented. A server requiring SPA stops startup with an explicit error. SPA uses UDP and server-provided connection settings. The official client uses Enlink-specific additions to the fwknop format, including inner and outer `enlink` markers. The SPA key and controller port are separate from the tunnel token and rules. Where a deployment supplies them is unknown.
+SPA is unimplemented. Rules with `spa_status: true` stop `serve` with an error.
 
-The official client encodes the packet as follows, with `b64` denoting standard Base64 without trailing padding:
+The official client sends one SPA packet over UDP immediately before TLS setup, to the gateway's `spaPort`, 62201 by default. The format extends fwknop with inner and outer `enlink` markers. With `b64` denoting standard Base64 without trailing padding:
 
 ```text
 K = decodeHex(key), or decodeHex(hex(MD5(key))) when key text is not 32 characters
@@ -61,6 +65,4 @@ full = b64(blob)
 wire = full.slice(10) + b64(HMAC-SHA256(K, full)) + "enlink"
 ```
 
-The gateway SPA UDP port is `spaPort`, defaulting to `62201`. Controller SPA settings come from connection configuration. The official client sends the packet once, immediately before TLS setup. The default allow-IP and the deployed key are unknown.
-
-The [university's client guide](https://its.suda.edu.cn/ae/d0/c3658a700112/page.htm) identifies the EnAgent/EnUES client and school SSO.
+The SPA key and controller port are separate from the tunnel token and rules. How a deployment supplies the key, and which allow-IP it expects, are unknown.
