@@ -4,10 +4,10 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/mark-dark.svg" />
-  <img align="right" src="assets/mark-light.svg" width="128" alt="openenlink 图标" />
+  <img align="right" src="assets/mark-light.svg" width="64" alt="openenlink 图标" />
 </picture>
 
-Enlink（易安联）网关的开源客户端，对应官方的 EnAgent 和 EnUES。它在终端里完成登录，然后在本机开一个 SOCKS5 和 HTTP 代理，通向网关后面的内网。系统路由和 DNS 设置保持原样。
+易安联（Enlink）VPN 的命令行客户端，连接 EnUES 和 EnAgent 所用网关，在本地提供 SOCKS5 和 HTTP 代理以访问内网。认证基于网关的 OIDC，存在对应适配器时在终端输入账号密码，否则在浏览器中登录。
 
 ## 安装
 

@@ -4,10 +4,10 @@ English | [简体中文](README.zh-CN.md)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/mark-dark.svg" />
-  <img align="right" src="assets/mark-light.svg" width="128" alt="openenlink icon" />
+  <img align="right" src="assets/mark-light.svg" width="64" alt="openenlink icon" />
 </picture>
 
-An open-source client for Enlink gateways, the ones the EnAgent and EnUES apps connect to. It signs in from the terminal and opens a local SOCKS5 and HTTP proxy into the network behind the gateway. System routes and DNS settings stay as they are.
+A command-line client for the Enlink VPN gateways used by EnUES and EnAgent, providing a local SOCKS5 and HTTP proxy for internal network access. It authenticates through the gateway's OIDC, with a username and password in the terminal when an adapter is available, or in a browser otherwise.
 
 ## Install
 
