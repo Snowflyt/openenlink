@@ -48,6 +48,16 @@ export function signature(
   return { Authorization: authorization, finger, now, requestId };
 }
 
+// fetch rejects with "fetch failed" and keeps the reason, such as a timeout or a refused
+// connection, in the cause.
+export function requestFailure(url: URL, error: unknown): Error {
+  const reason = error instanceof Error && error.cause instanceof Error ? error.cause : error;
+  return new Error(
+    `Request to ${url.host} failed: ${reason instanceof Error ? reason.message : String(reason)}`,
+    { cause: error },
+  );
+}
+
 export class Controller {
   readonly origin: string;
   private readonly fetch: typeof globalThis.fetch;
@@ -88,7 +98,9 @@ export class Controller {
       redirect: "error" as const,
       signal: AbortSignal.timeout(15_000),
     };
-    const response = await this.fetch(url, options);
+    const response = await this.fetch(url, options).catch((error: unknown) => {
+      throw requestFailure(url, error);
+    });
     if (response.status === 401) throw new AuthenticationError("Campus authorization expired");
     if (!response.ok)
       throw new Error(

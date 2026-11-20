@@ -56,6 +56,22 @@ await test("Controller signs the bytes it sends and uses the refresh token for r
   }
 });
 
+await test("Controller names the host and reason when a request fails", async () => {
+  const controller = new Controller("https://vpn.example.test", {
+    fetch: () =>
+      Promise.reject(
+        new TypeError("fetch failed", { cause: new Error("connect ECONNREFUSED 192.0.2.1:443") }),
+      ),
+  });
+  try {
+    await assert.rejects(controller.user("token"), {
+      message: "Request to vpn.example.test failed: connect ECONNREFUSED 192.0.2.1:443",
+    });
+  } finally {
+    await controller.close();
+  }
+});
+
 await test("Controller distinguishes expired authorization from malformed replies", async () => {
   const controller = new Controller("https://vpn.example.test", {
     fetch: () => Promise.resolve(new Response(null, { status: 401 })),

@@ -2,6 +2,8 @@
 // followed one hop at a time so every request stays on HTTPS and a posted password never
 // travels to a second address.
 
+import { requestFailure } from "./controller.ts";
+
 export type Cookie = { name: string; value: string; host: string; path: string; expires?: number };
 
 const HOPS = 12;
@@ -83,6 +85,8 @@ export class Web {
       },
       redirect: "manual",
       signal: AbortSignal.timeout(15_000),
+    }).catch((error: unknown) => {
+      throw requestFailure(url, error);
     });
     for (const header of response.headers.getSetCookie()) {
       const cookie = parseCookie(header, url);
