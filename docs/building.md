@@ -59,7 +59,7 @@ It strips the types from `src` with ts-blank-space, which leaves the JavaScript 
 
 The virtual file system needs Node.js 27.0.0-alpha.0.1.1 or newer. With an older Node.js, the build downloads that release from [nodejs.org](https://nodejs.org/) into `dist` and builds with it. Node.js 27 has no build for Intel Macs, so they run from source.
 
-On macOS the build signs the executable ad hoc.
+On macOS the build signs the executable ad hoc. On Windows it replaces the Node.js icon in the executable with `assets/icon.ico`.
 
 wasi-sdk runs only on glibc, so a musl executable takes two steps on one checkout: `npm install` on a glibc system, then `npm ci --ignore-scripts` and `npm run build` in an Alpine container.
 

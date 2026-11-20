@@ -2,6 +2,11 @@
 
 English | [简体中文](README.zh-CN.md)
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/mark-dark.svg" />
+  <img align="right" src="assets/mark-light.svg" width="128" alt="openenlink icon" />
+</picture>
+
 An open-source client for Enlink gateways, the ones the EnAgent and EnUES apps connect to. It signs in from the terminal and opens a local SOCKS5 and HTTP proxy into the network behind the gateway. System routes and DNS settings stay as they are.
 
 ## Install

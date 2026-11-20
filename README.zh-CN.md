@@ -2,6 +2,11 @@
 
 [English](README.md) | 简体中文
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/mark-dark.svg" />
+  <img align="right" src="assets/mark-light.svg" width="128" alt="openenlink 图标" />
+</picture>
+
 Enlink（易安联）网关的开源客户端，对应官方的 EnAgent 和 EnUES。它在终端里完成登录，然后在本机开一个 SOCKS5 和 HTTP 代理，通向网关后面的内网。系统路由和 DNS 设置保持原样。
 
 ## 安装
