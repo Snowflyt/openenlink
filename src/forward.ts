@@ -7,6 +7,7 @@ import type { Socket } from "node:net";
 import type { NetworkStack } from "#tcpip";
 
 import type { Resolver } from "./dns.ts";
+import * as log from "./log.ts";
 import { relay } from "./relay.ts";
 import { ByteReader } from "./stream.ts";
 
@@ -20,9 +21,8 @@ export type Forwarding = { port: number; close: () => Promise<void> };
 const UDP_IDLE = 60_000;
 
 function report(rule: Forward, error: unknown): void {
-  console.error(
-    `Forwarding to ${rule.host}:${rule.hostPort} failed:`,
-    error instanceof Error ? error.message : "Unknown error",
+  log.error(
+    `Forwarding to ${rule.host}:${rule.hostPort} failed: ${error instanceof Error ? error.message : "Unknown error"}`,
   );
 }
 

@@ -97,6 +97,16 @@ After a dropped tunnel, `serve` reconnects by itself. The delay starts at one se
 
 When the authorization expires, `serve` renews it using the gateway's refresh token or the remembered credentials. If neither works, it exits with status 3. Run `openenlink login` again.
 
+### Log
+
+Each line from `serve` starts with the local time and a level. `info` goes to standard output, `warn` and `error` to standard error:
+
+```text
+[2026-11-21 09:43:02.123] [info] Proxy listening on 127.0.0.1:1088
+```
+
+Under systemd the journal records the time of each line, and `serve` leaves its own out.
+
 ### Shared machines
 
 Other accounts on the same machine can reach the local port. `--proxy-user` makes the proxy require a username and password:

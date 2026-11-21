@@ -10,6 +10,7 @@ import { AuthenticationError, Controller, serverOrigin } from "./controller.ts";
 import { hostName } from "./dns.ts";
 import type { Forward } from "./forward.ts";
 import { showImage } from "./image.ts";
+import * as log from "./log.ts";
 import { login, pastedLogin } from "./login.ts";
 import type { SignIn } from "./login.ts";
 import { nc } from "./nc.ts";
@@ -210,9 +211,9 @@ async function main(): Promise<void> {
       throw new UsageError("Proxy username and password must be 1 to 255 bytes");
     if (!/^127\.|^::1$/.test(host)) {
       if (!auth)
-        console.error("Other machines can use the proxy without a password; --proxy-user sets one");
+        log.warn("Other machines can use the proxy without a password; --proxy-user sets one");
       else if (forwards.length)
-        console.error("Other machines can use the forwarded ports without a password");
+        log.warn("Other machines can use the forwarded ports without a password");
     }
 
     const controller = new AbortController();

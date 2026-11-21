@@ -8,6 +8,7 @@ import type { Config } from "./config.ts";
 import { AuthenticationError, Controller, PolicyError, tunnelRules } from "./controller.ts";
 import type { CredentialStore, Credentials, RememberedPassword } from "./credentials.ts";
 import type { Forward } from "./forward.ts";
+import * as log from "./log.ts";
 import { WrongPassword, login } from "./login.ts";
 import type { ProxyAuth } from "./proxy.ts";
 import type { Gateway } from "./tunnel.ts";
@@ -53,13 +54,13 @@ export async function serve(
       } catch (error) {
         signal.throwIfAborted();
         if (error instanceof AuthenticationError || error instanceof PolicyError) throw error;
-        console.error(error instanceof Error ? error.message : "Connection failed");
+        log.error(error instanceof Error ? error.message : "Connection failed");
       }
       signal.throwIfAborted();
       // Another client on the same account ends our tunnel right after it starts; growing the
       // delay keeps the two from replacing each other every second.
       if (lived > 60_000) retry = 1000;
-      console.error(`Reconnecting in ${retry / 1000} second${retry === 1000 ? "" : "s"}`);
+      log.warn(`Reconnecting in ${retry / 1000} second${retry === 1000 ? "" : "s"}`);
       await setTimeout(retry, undefined, { signal });
       retry = Math.min(retry * 2, 30_000);
     }
@@ -91,7 +92,7 @@ async function session(
     if (!renewed) {
       const password = await store.loadPassword();
       if (!password) throw error;
-      console.log("Session ended; signing in again");
+      log.info("Session ended; signing in again");
       renewed = await renew(await controller.loginUrl(signal), password, store, signal, userAgent);
     }
     await store.save(renewed);
@@ -155,10 +156,10 @@ async function runWorker(options: TunnelOptions, signal: AbortSignal): Promise<v
   signal.addEventListener("abort", stop, { once: true });
   worker.once("message", () => {
     const host = options.host.includes(":") ? `[${options.host}]` : options.host;
-    console.log(`Proxy listening on ${host}:${options.port}`);
+    log.info(`Proxy listening on ${host}:${options.port}`);
     for (const rule of options.forwards) {
       const local = `${host}:${rule.port}${rule.udp ? "/udp" : ""}`;
-      console.log(`Forwarding ${local} to ${rule.host}:${rule.hostPort}`);
+      log.info(`Forwarding ${local} to ${rule.host}:${rule.hostPort}`);
     }
   });
 

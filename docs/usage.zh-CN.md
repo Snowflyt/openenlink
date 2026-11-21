@@ -97,6 +97,16 @@ curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
 
 授权过期时，`serve` 用网关的 refresh token 或已保存的登录信息续期。两者都失败时，以状态 3 退出，需要重新执行 `openenlink login`。
 
+### 日志
+
+`serve` 输出的每一行以本地时间和级别开头。`info` 写到标准输出，`warn` 和 `error` 写到标准错误：
+
+```text
+[2026-11-21 09:43:02.123] [info] Proxy listening on 127.0.0.1:1088
+```
+
+在 systemd 下，journal 会记录每一行的时间，`serve` 不再打印自己的时间。
+
 ### 多人共用的机器
 
 同一台机器上的其他账号也能连接本地端口。`--proxy-user` 让代理要求用户名和密码：

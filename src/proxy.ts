@@ -7,6 +7,7 @@ import type { NetworkStack } from "#tcpip";
 
 import type { Resolver } from "./dns.ts";
 import { serveHttp } from "./http.ts";
+import * as log from "./log.ts";
 import { serveSocks } from "./socks.ts";
 import { ByteReader } from "./stream.ts";
 
@@ -46,9 +47,8 @@ export class ProxyServer {
       socket.once("close", () => clients.delete(socket));
       socket.setTimeout(15_000, () => socket.destroy());
       void serve(socket, stack, resolver, authorize).catch((error: unknown) => {
-        console.error(
-          "Proxy connection failed:",
-          error instanceof Error ? error.message : "Unknown error",
+        log.error(
+          `Proxy connection failed: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
         socket.destroy();
       });

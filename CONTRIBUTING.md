@@ -39,6 +39,7 @@ npm run format
 | `src/proxy.ts`, `src/socks.ts`, `src/http.ts`, `src/relay.ts`, `src/dns.ts` | The local proxy and its resolver                                           |
 | `src/nc.ts`                                                                 | The `nc` command                                                           |
 | `src/forward.ts`                                                            | Port forwarding for `serve --forward`                                      |
+| `src/log.ts`                                                                | The `serve` log                                                            |
 | `src/config.ts`, `src/credentials.ts`, `src/keyring.ts`                     | Settings and credential storage                                            |
 | `src/json.ts`                                                               | Field checks for parsed JSON                                               |
 | `src/stream.ts`                                                             | Byte reads and writes on sockets and TLS streams                           |
