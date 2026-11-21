@@ -40,7 +40,7 @@ Host *.suda.edu.cn
 
 本节供维护 `src/adapters/suda.ts` 里的适配器时参考。
 
-网关的 OIDC 入口重定向到 `auth.suda.edu.cn`：先到 `/sso/oauth2/authorize`，再到 `/sso/login`，最后到 CAS 页面 `/cas/login`。适配器根据路径和 `login-type` 元素识别该页面。
+网关的 OIDC 入口重定向到 `auth.suda.edu.cn`：先到 `/sso/oauth2/authorize`，再到 `/sso/login`，最后到 CAS 页面 `/cas/login`。适配器根据主机名、路径和 `login-type` 元素识别该页面。
 
 该页面用脚本渲染表单。提交时，脚本把隐藏的 `.for-form` 字段复制进 `#login-form`，去掉 `pid`，然后把 `_eventId`、`execution`、`lt`、`source`、`username` 和 `password` 提交到 `/cas/login`。适配器提交同样的字段。页面上出现其他输入字段时，终端登录在提示输入密码之前停止。
 

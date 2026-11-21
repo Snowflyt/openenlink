@@ -17,7 +17,9 @@ export const suda: Adapter = {
   session: ["CASTGC", "LOGIN_TOKEN"],
 
   form(page, web) {
-    if (page.url.pathname !== "/cas/login" || !page.html.includes('id="login-type"')) return;
+    const { hostname, pathname } = page.url;
+    if (hostname !== "auth.suda.edu.cn" || pathname !== "/cas/login") return;
+    if (!page.html.includes('id="login-type"')) return;
     const inputs = tags(page.html, "input").flatMap(({ name, type, value = "" }) =>
       name === undefined ? [] : [{ name, type, value }],
     );

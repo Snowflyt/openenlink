@@ -26,7 +26,7 @@ export type Adapter = {
 };
 ```
 
-`form` receives the first page the sign-in lands on. It returns nothing for a page of another site, so check the path and a marker in the HTML first. For its own page it returns a `LoginForm`:
+`form` receives the first page the sign-in lands on. It returns nothing for a page of another site, so check its host, its path and a marker in the HTML first. For its own page it returns a `LoginForm`:
 
 ```ts
 export type LoginForm = {

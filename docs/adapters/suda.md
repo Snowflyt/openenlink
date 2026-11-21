@@ -40,7 +40,7 @@ Host *.suda.edu.cn
 
 This section is for maintaining the adapter in `src/adapters/suda.ts`.
 
-The gateway's OIDC entry redirects to `auth.suda.edu.cn`: `/sso/oauth2/authorize`, then `/sso/login`, then the CAS page `/cas/login`. The adapter recognises that page by its path and the `login-type` element.
+The gateway's OIDC entry redirects to `auth.suda.edu.cn`: `/sso/oauth2/authorize`, then `/sso/login`, then the CAS page `/cas/login`. The adapter recognises that page by its host, its path and the `login-type` element.
 
 The page renders its form with a script. On submit, the script copies the hidden `.for-form` fields into `#login-form`, leaves out `pid`, and posts `_eventId`, `execution`, `lt`, `source`, `username` and `password` to `/cas/login`. The adapter posts the same fields. A page with other input fields stops the terminal sign-in before it prompts for a password.
 

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import dns from "node:dns";
 import { once } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createServer } from "node:https";
-import { test } from "node:test";
+import { mock, test } from "node:test";
 import { getCACertificates, setDefaultCACertificates } from "node:tls";
 
 import { generate } from "selfsigned";
@@ -15,8 +16,8 @@ import type { Credentials, RememberedPassword } from "../src/credentials.ts";
 import { WrongPassword, login, pastedLogin } from "../src/login.ts";
 import type { LoginOptions } from "../src/login.ts";
 
-// One server plays the gateway at 127.0.0.1 and the CAS sign-in page at localhost, so the two
-// keep separate cookies.
+// One server plays the gateway at 127.0.0.1 and the CAS sign-in page at auth.suda.edu.cn, which
+// resolves to the same address here. The two hosts keep separate cookies.
 const cas = {
   password: "right-password",
   form: "normal" as "normal" | "changed",
@@ -37,11 +38,17 @@ const issue = (set: Set<string>) => {
 const base64 = (text: string) => Buffer.from(text).toString("base64");
 const CAPTCHA = Buffer.from("captcha image");
 
-const certificate = await generate([{ name: "commonName", value: "localhost" }], {
+const IDP = "auth.suda.edu.cn";
+const { lookup } = dns;
+mock.method(dns, "lookup", (hostname: string, ...rest: unknown[]) => {
+  Reflect.apply(lookup, dns, [hostname === IDP ? "127.0.0.1" : hostname, ...rest]);
+});
+
+const certificate = await generate([{ name: "commonName", value: IDP }], {
   extensions: [
     {
       altNames: [
-        { type: 2, value: "localhost" },
+        { type: 2, value: IDP },
         { ip: "127.0.0.1", type: 7 },
       ],
       name: "subjectAltName",
@@ -60,7 +67,7 @@ await once(server, "listening");
 const address = server.address();
 if (!address || typeof address === "string") throw new Error("The test server has no port");
 const gateway = `https://127.0.0.1:${String(address.port)}`;
-const idp = `https://localhost:${String(address.port)}`;
+const idp = `https://${IDP}:${String(address.port)}`;
 const entry = new URL(`${gateway}/sso`);
 const token = base64("access-token");
 
