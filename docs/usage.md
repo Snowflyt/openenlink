@@ -29,7 +29,7 @@ The authorization stays on this machine until `openenlink logout`. How you sign 
 
 On a sign-in page with an [adapter](../README.md#adapters), `login` prompts for the username and password and submits them to that page over HTTPS. The username prompt defaults to the last used account, and `--user name` skips the prompt. Password input is hidden, and `login` allows up to three attempts on a wrong password.
 
-When the page requires a captcha, `login` renders it in the terminal and prompts for the code. In terminals without image or true-color support, it writes the image to a temporary file and prints the path.
+When the page requires a captcha, `login` renders it in the terminal and prompts for the code. In terminals without image or 256-color support, it writes the image to a temporary file and prints the path.
 
 ### In a browser
 

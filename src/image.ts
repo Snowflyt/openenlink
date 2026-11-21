@@ -79,6 +79,26 @@ function runLength(text: string): string {
   return text.replaceAll(/(.)\1{3,}/g, (run, char: string) => `!${String(run.length)}${char}`);
 }
 
+const CUBE = [0, 95, 135, 175, 215, 255];
+
+// The nearest color in xterm's 256-color palette, from its 6x6x6 cube or its gray ramp. The
+// first 16 colors follow the terminal's theme and are left out.
+function xterm256(r: number, g: number, b: number): number {
+  const level = (value: number) => {
+    if (value < 48) return 0;
+    if (value < 115) return 1;
+    return Math.floor((value - 35) / 40);
+  };
+  const [lr, lg, lb] = [level(r), level(g), level(b)];
+  const gray = Math.min(Math.max(Math.round(((r + g + b) / 3 - 8) / 10), 0), 23);
+  const distance = (cr: number, cg: number, cb: number) =>
+    (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2;
+  const shade = 8 + gray * 10;
+  return distance(CUBE[lr], CUBE[lg], CUBE[lb]) <= distance(shade, shade, shade) ?
+      16 + lr * 36 + lg * 6 + lb
+    : 232 + gray;
+}
+
 // Two pixels per cell: the upper one is the ▀ glyph, the lower one its background. The image
 // shrinks by averaging to fit the given number of columns.
 export function halfBlocks(bitmap: Bitmap, columns: number): string {
@@ -99,13 +119,14 @@ export function halfBlocks(bitmap: Bitmap, columns: number): string {
         for (let channel = 0; channel < 3; channel++)
           sum[channel] += bitmap.rgb[(sy * bitmap.width + sx) * 3 + channel];
     const count = (right - left) * (bottom - top);
-    return sum.map((value) => String(Math.round(value / count))).join(";");
+    const [r, g, b] = sum.map((value) => Math.round(value / count));
+    return String(xterm256(r, g, b));
   };
   let out = "";
   for (let y = 0; y < height; y += 2) {
     for (let x = 0; x < width; x++) {
-      const lower = y + 1 < height ? `\x1b[48;2;${pixel(x, y + 1)}m` : "\x1b[49m";
-      out += `\x1b[38;2;${pixel(x, y)}m${lower}▀`;
+      const lower = y + 1 < height ? `\x1b[48;5;${pixel(x, y + 1)}m` : "\x1b[49m";
+      out += `\x1b[38;5;${pixel(x, y)}m${lower}▀`;
     }
     out += "\x1b[0m\n";
   }
@@ -175,8 +196,14 @@ function outerSixel(): boolean {
   }
 }
 
-function truecolor(env: NodeJS.ProcessEnv): boolean {
-  return env.COLORTERM === "truecolor" || env.COLORTERM === "24bit" || Boolean(env.WT_SESSION);
+// Terminals that draw xterm's 256 colors. ssh passes TERM on but usually not COLORTERM.
+export function colors256(env: NodeJS.ProcessEnv): boolean {
+  return (
+    env.COLORTERM === "truecolor" ||
+    env.COLORTERM === "24bit" ||
+    Boolean(env.WT_SESSION) ||
+    (env.TERM ?? "").includes("256color")
+  );
 }
 
 // Draws the image and returns a function that removes whatever was left on disk.
@@ -198,7 +225,7 @@ export async function showImage(jpeg: Buffer): Promise<() => Promise<void>> {
       if (protocol === "sixel" && multiplexed(process.env) && !outerSixel()) protocol = undefined;
       if (protocol === "kitty") process.stderr.write(kitty(bitmap));
       else if (protocol === "sixel") process.stderr.write(sixel(bitmap) + "\n");
-      else if (truecolor(process.env))
+      else if (colors256(process.env))
         process.stderr.write(halfBlocks(bitmap, process.stderr.columns));
       else bitmap = undefined;
       if (bitmap) return done;

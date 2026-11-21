@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { envProtocol, halfBlocks, multiplexed, replyProtocol, sixel } from "../src/image.ts";
+import {
+  colors256,
+  envProtocol,
+  halfBlocks,
+  multiplexed,
+  replyProtocol,
+  sixel,
+} from "../src/image.ts";
 import type { Bitmap } from "../src/jpeg.ts";
 
 await test("Find the image protocol a terminal speaks", () => {
@@ -37,12 +44,15 @@ const bitmap: Bitmap = {
 await test("Draw an image with half blocks", () => {
   assert.equal(
     halfBlocks(bitmap, 80),
-    "\x1b[38;2;255;0;0m\x1b[48;2;0;0;255m▀\x1b[38;2;0;255;0m\x1b[48;2;255;255;255m▀\x1b[0m\n" +
-      "\x1b[38;2;0;0;0m\x1b[49m▀\x1b[38;2;0;0;0m\x1b[49m▀\x1b[0m\n",
+    "\x1b[38;5;196m\x1b[48;5;21m▀\x1b[38;5;46m\x1b[48;5;231m▀\x1b[0m\n" +
+      "\x1b[38;5;16m\x1b[49m▀\x1b[38;5;16m\x1b[49m▀\x1b[0m\n",
   );
-  // Two columns leave room for one: the upper pixel averages the first two rows, the lower one
-  // is the black row.
-  assert.equal(halfBlocks(bitmap, 2), "\x1b[38;2;128;128;128m\x1b[48;2;0;0;0m▀\x1b[0m\n");
+  // Two columns leave room for one: the upper pixel averages the first two rows to the gray
+  // 128, the lower one is the black row.
+  assert.equal(halfBlocks(bitmap, 2), "\x1b[38;5;244m\x1b[48;5;16m▀\x1b[0m\n");
+  assert.equal(colors256({ TERM: "xterm-256color" }), true);
+  assert.equal(colors256({ TERM: "xterm", COLORTERM: "truecolor" }), true);
+  assert.equal(colors256({ TERM: "xterm" }), false);
 });
 
 await test("Draw an image with sixel", () => {
