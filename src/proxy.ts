@@ -7,8 +7,8 @@ import type { NetworkStack } from "#tcpip";
 
 import { Resolver } from "./dns.ts";
 import { serveHttp } from "./http.ts";
-import { ByteReader } from "./protocol.ts";
 import { serveSocks } from "./socks.ts";
+import { ByteReader } from "./stream.ts";
 
 export type ProxyAuth = { username: string; password: string };
 

@@ -40,6 +40,7 @@ npm run format
 | `src/nc.ts`                                                                 | The `nc` command                                                           |
 | `src/config.ts`, `src/credentials.ts`, `src/keyring.ts`                     | Settings and credential storage                                            |
 | `src/json.ts`                                                               | Field checks for parsed JSON                                               |
+| `src/stream.ts`                                                             | Byte reads and writes on sockets and TLS streams                           |
 | `test/`                                                                     | Tests for the Node.js test runner                                          |
 | `vendor/`                                                                   | The tcpip.js and lwIP submodules, with `tcpip.js.patch`                    |
 | `docs/`                                                                     | User and contributor documentation                                         |

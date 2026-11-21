@@ -1,7 +1,7 @@
 import { once } from "node:events";
 import { connect } from "node:net";
 
-import { ByteReader, write } from "./protocol.ts";
+import { ByteReader, write } from "./stream.ts";
 
 // Joins standard input and output to host:port through the proxy port of a running `serve`.
 export async function nc(host: string, port: number, proxyPort: number): Promise<void> {

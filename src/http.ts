@@ -3,9 +3,9 @@ import type { Socket } from "node:net";
 import type { NetworkStack } from "#tcpip";
 
 import type { Resolver } from "./dns.ts";
-import type { ByteReader } from "./protocol.ts";
-import { write } from "./protocol.ts";
 import { relay } from "./relay.ts";
+import type { ByteReader } from "./stream.ts";
+import { write } from "./stream.ts";
 
 // Headers that describe the client's connection to this proxy.
 const PROXY_HEADERS = new Set([

@@ -5,7 +5,8 @@ import { test } from "node:test";
 import { parseIPv4Packet, serializeIPv4Packet } from "@tcpip/wire";
 
 import { rewriteAddress } from "../src/packet.ts";
-import { ByteReader, authentication, readAuthentication } from "../src/protocol.ts";
+import { authentication, readAuthentication } from "../src/protocol.ts";
+import { ByteReader } from "../src/stream.ts";
 
 await test("DNS address translation preserves IPv4 and UDP checksums", () => {
   const packet = serializeIPv4Packet({

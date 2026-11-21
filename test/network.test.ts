@@ -15,9 +15,9 @@ import { generate } from "selfsigned";
 
 import { createStack } from "#tcpip";
 
-import { ByteReader, write } from "../src/protocol.ts";
 import { ProxyServer } from "../src/proxy.ts";
 import type { ProxyAuth } from "../src/proxy.ts";
+import { ByteReader, write } from "../src/stream.ts";
 import { Tunnel } from "../src/tunnel.ts";
 
 if (isMainThread) {

@@ -6,9 +6,9 @@ import type { Socket } from "node:net";
 import type { NetworkStack, UdpSocket } from "#tcpip";
 
 import type { Resolver } from "./dns.ts";
-import type { ByteReader } from "./protocol.ts";
-import { write } from "./protocol.ts";
 import { relay } from "./relay.ts";
+import type { ByteReader } from "./stream.ts";
+import { write } from "./stream.ts";
 
 type Target = { host: string; port: number };
 

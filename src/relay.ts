@@ -2,8 +2,8 @@ import type { Socket } from "node:net";
 
 import type { TcpConnection } from "#tcpip";
 
-import type { ByteReader } from "./protocol.ts";
-import { write } from "./protocol.ts";
+import type { ByteReader } from "./stream.ts";
+import { write } from "./stream.ts";
 
 // Copies bytes both ways until each side ends its stream, then closes both sides. `reply` goes to
 // the client and `request` to the internal host before the copying starts.

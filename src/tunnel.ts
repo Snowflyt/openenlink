@@ -6,15 +6,9 @@ import { createStack } from "#tcpip";
 import type { NetworkStack, TunInterface } from "#tcpip";
 
 import { rewriteAddress } from "./packet.ts";
-import {
-  ByteReader,
-  authentication,
-  frame,
-  readAuthentication,
-  readPacket,
-  write,
-} from "./protocol.ts";
+import { authentication, frame, readAuthentication, readPacket } from "./protocol.ts";
 import type { Addresses } from "./protocol.ts";
+import { ByteReader, write } from "./stream.ts";
 
 export type Gateway = { host: string; port: number; serverName?: string; dns?: string };
 
