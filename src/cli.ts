@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { isIP, isIPv4 } from "node:net";
-import { parseArgs } from "node:util";
+import { parseArgs, styleText } from "node:util";
 
 import { UnsupportedLogin } from "./adapter.ts";
 import { serve } from "./client.ts";
@@ -75,13 +75,27 @@ async function signIn(entry: URL, config: Config, user?: string): Promise<SignIn
   }
 }
 
+// A clickable, underlined address in a terminal that shows styles; the plain address elsewhere.
+function link(url: string): string {
+  if (!process.stdout.isTTY || !process.stdout.hasColors()) return url;
+  return `\x1b]8;;${url}\x1b\\${styleText("underline", url)}\x1b]8;;\x1b\\`;
+}
+
 async function browserSignIn(entry: URL, userAgent?: string) {
-  console.log(`Sign in with a browser at ${entry.href}`);
-  console.log(`Then paste the address the browser ends on, or the value of the access_token
-cookie of ${entry.host}:
-  Chrome, Edge: Developer tools, Application, Cookies
-  Firefox: Developer tools, Storage, Cookies
-  Safari: Develop, Show Web Inspector, Storage, Cookies`);
+  const bold = (text: string) => styleText("bold", text);
+  const dim = (text: string) => styleText("dim", text);
+  console.log(`Sign in with a browser at
+  ${link(entry.href)}
+
+Then paste ${bold("either of these")}:
+  ${bold("1.")} The address the browser ends on.
+     ${dim("If the gateway moves on to another page, that address no longer")}
+     ${dim("holds the sign-in. Use 2 instead.")}
+  ${bold("2.")} The value of the access_token cookie of ${entry.host}:
+       Chrome, Edge   Developer tools > Application > Cookies
+       Firefox        Developer tools > Storage > Cookies
+       Safari         Develop > Show Web Inspector > Storage > Cookies
+`);
   return pastedLogin(await askPaste("Paste (hidden): "), entry, userAgent);
 }
 

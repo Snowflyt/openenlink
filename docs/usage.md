@@ -40,10 +40,9 @@ openenlink login --browser
 `login --browser` prints the gateway's sign-in URL. Without the flag, `login` falls back to browser sign-in when no adapter matches, or on an empty response at the first username prompt or the captcha prompt.
 
 1. Open the printed URL in a browser and sign in.
-2. Copy the final redirect URL.
-3. Paste it at the `Paste (hidden):` prompt.
+2. At the `Paste (hidden):` prompt, paste the address the browser ends on, or the value of the gateway's `access_token` cookie from the browser's developer tools.
 
-The prompt also takes the value of the gateway's `access_token` cookie, copied from the browser's developer tools.
+Some gateways move on to another page right after the sign-in. That page's address no longer holds the sign-in, so paste the cookie instead.
 
 ### Stay signed in
 
