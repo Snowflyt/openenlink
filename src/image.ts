@@ -152,6 +152,8 @@ async function queryTerminal(): Promise<string> {
   } finally {
     stdin.setRawMode(false);
     stdin.pause();
+    // Terminal.app prints the kitty query as text, so the line is cleared before drawing.
+    process.stderr.write("\r\x1b[2K");
   }
 }
 
