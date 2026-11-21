@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { isIP } from "node:net";
 import { parseArgs } from "node:util";
 
 import { UnsupportedLogin } from "./adapter.ts";
@@ -15,7 +16,7 @@ import { ask, askPaste, askSecret } from "./prompt.ts";
 const USAGE = `Usage:
   openenlink login [https://vpn.example.edu] [--user name] [--remember] [--browser]
                    [--insecure-storage] [--user-agent text]
-  openenlink serve [--port 1088] [--proxy-user name]
+  openenlink serve [--bind 127.0.0.1] [--port 1088] [--proxy-user name]
   openenlink nc host port [--port 1088]
   openenlink status
   openenlink logout`;
@@ -150,8 +151,14 @@ async function main(): Promise<void> {
   if (command === "serve") {
     const { values } = parseArgs({
       args,
-      options: { port: { type: "string" }, "proxy-user": { type: "string" } },
+      options: {
+        bind: { type: "string" },
+        port: { type: "string" },
+        "proxy-user": { type: "string" },
+      },
     });
+    const host = values.bind ?? "127.0.0.1";
+    if (!isIP(host)) throw new UsageError("--bind needs an IP address");
     const port = portNumber(values.port ?? 1088);
     const config = await loadConfig();
     if (!config) throw new AuthenticationError("Run openenlink login first");
@@ -162,11 +169,13 @@ async function main(): Promise<void> {
       );
     if (auth && Object.values(auth).some((value) => !value || Buffer.byteLength(value) > 255))
       throw new UsageError("Proxy username and password must be 1 to 255 bytes");
+    if (!auth && !/^127\.|^::1$/.test(host))
+      console.error("Other machines can use the proxy without a password; --proxy-user sets one");
 
     const controller = new AbortController();
     process.once("SIGINT", () => controller.abort());
     process.once("SIGTERM", () => controller.abort());
-    await serve(config, { port, auth }, controller.signal).catch((error: unknown) => {
+    await serve(config, { auth, host, port }, controller.signal).catch((error: unknown) => {
       if (!controller.signal.aborted) throw error;
     });
     return;

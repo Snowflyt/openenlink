@@ -5,7 +5,7 @@
 ```text
 openenlink login [https://vpn.example.edu] [--user name] [--remember] [--browser]
                  [--insecure-storage] [--user-agent text]
-openenlink serve [--port 1088] [--proxy-user name]
+openenlink serve [--bind 127.0.0.1] [--port 1088] [--proxy-user name]
 openenlink nc host port [--port 1088]
 openenlink status
 openenlink logout
@@ -71,7 +71,7 @@ openenlink 信任 Node.js 信任的证书颁发机构。网关或登录页使用
 openenlink serve
 ```
 
-`serve` 连接网关，在 `127.0.0.1:1088` 上监听，直到按下 `Ctrl+C`。`--port` 指定其他端口。
+`serve` 连接网关，在 `127.0.0.1:1088` 上监听，直到按下 `Ctrl+C`。`--port` 指定其他端口。`--bind` 指定监听地址，例如 `0.0.0.0`，供其他机器或 Docker 容器外的客户端连接。未设置 `--proxy-user` 时，能访问该地址的客户端都能使用隧道，`serve` 会输出警告。
 
 该端口接收 SOCKS5 请求（CONNECT 和 UDP ASSOCIATE）和 HTTP 代理请求（包括 CONNECT）。目标地址为 IPv4。
 

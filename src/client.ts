@@ -14,7 +14,7 @@ import type { TunnelOptions } from "./worker.ts";
 
 export async function serve(
   config: Config,
-  listener: { port: number; auth?: ProxyAuth },
+  listener: { host: string; port: number; auth?: ProxyAuth },
   signal: AbortSignal,
 ): Promise<void> {
   const store = credentialStore(config);
@@ -146,7 +146,8 @@ async function runWorker(options: TunnelOptions, signal: AbortSignal): Promise<v
   };
   signal.addEventListener("abort", stop, { once: true });
   worker.once("message", () => {
-    console.log(`Proxy listening on 127.0.0.1:${options.port}`);
+    const host = options.host.includes(":") ? `[${options.host}]` : options.host;
+    console.log(`Proxy listening on ${host}:${options.port}`);
   });
 
   try {

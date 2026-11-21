@@ -5,7 +5,7 @@ English | [简体中文](usage.zh-CN.md)
 ```text
 openenlink login [https://vpn.example.edu] [--user name] [--remember] [--browser]
                  [--insecure-storage] [--user-agent text]
-openenlink serve [--port 1088] [--proxy-user name]
+openenlink serve [--bind 127.0.0.1] [--port 1088] [--proxy-user name]
 openenlink nc host port [--port 1088]
 openenlink status
 openenlink logout
@@ -71,7 +71,7 @@ openenlink trusts the certificate authorities Node.js trusts. For a gateway or s
 openenlink serve
 ```
 
-`serve` connects to the gateway and listens on `127.0.0.1:1088` until `Ctrl+C`. `--port` chooses another port.
+`serve` connects to the gateway and listens on `127.0.0.1:1088` until `Ctrl+C`. `--port` chooses another port. `--bind` chooses the address, such as `0.0.0.0` for clients on other machines or outside a Docker container. Without `--proxy-user`, any client that reaches the address can use the tunnel, and `serve` prints a warning.
 
 The port accepts SOCKS5 requests (CONNECT and UDP ASSOCIATE) and HTTP proxy requests, CONNECT included. Destinations are IPv4.
 

@@ -26,6 +26,8 @@ if (isMainThread) {
     { dns: "127.0.0.1", compressed: false },
     { dns: "10.88.0.1", compressed: true },
     { dns: "10.88.0.1", compressed: false, auth: { username: "student", password: "proxy" } },
+    // An IPv6 listener sees the IPv4 clients below as ::ffff:127.0.0.1.
+    { dns: "10.88.0.1", compressed: false, bind: "::" },
   ];
   for (const scenario of cases)
     await test(
@@ -49,12 +51,14 @@ if (isMainThread) {
 async function exercise(): Promise<void> {
   const {
     auth,
+    bind = "127.0.0.1",
     compressed,
     dns: peerAddress,
   } = workerData as {
     compressed: boolean;
     dns: `${number}.${number}.${number}.${number}`;
     auth?: ProxyAuth;
+    bind?: string;
   };
   const pems = await generate([{ name: "commonName", value: "gateway.test" }], {
     extensions: [
@@ -165,7 +169,12 @@ async function exercise(): Promise<void> {
   const gateway = { host: "127.0.0.1", port: address.port, serverName: "gateway.test" };
   await assert.rejects(Tunnel.connect(gateway, "student", "secret"));
   const tunnel = await Tunnel.connect(gateway, "student", "secret", { ca: pems.cert });
-  const proxy = await ProxyServer.listen(tunnel.stack, tunnel.dnsServer, 0, auth);
+  const proxy = await ProxyServer.listen(
+    tunnel.stack,
+    tunnel.dnsServer,
+    { host: bind, port: 0 },
+    auth,
+  );
   void tunnel.done.catch(() => {});
 
   const credentials = (password: string) => {

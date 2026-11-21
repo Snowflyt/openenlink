@@ -9,6 +9,7 @@ export type TunnelOptions = {
   gateway: Gateway;
   user: string;
   token: string;
+  host: string;
   port: number;
   auth?: ProxyAuth;
 };
@@ -16,7 +17,7 @@ export type TunnelOptions = {
 const options = workerData as TunnelOptions;
 const tunnel = await Tunnel.connect(options.gateway, options.user, options.token);
 void tunnel.done.catch(() => {});
-const proxy = await ProxyServer.listen(tunnel.stack, tunnel.dnsServer, options.port, options.auth);
+const proxy = await ProxyServer.listen(tunnel.stack, tunnel.dnsServer, options, options.auth);
 parentPort!.postMessage({ port: proxy.port });
 
 try {

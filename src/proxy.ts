@@ -11,6 +11,7 @@ import { serveSocks } from "./socks.ts";
 import { ByteReader } from "./stream.ts";
 
 export type ProxyAuth = { username: string; password: string };
+export type Listen = { host: string; port: number };
 
 type Authorize = (username: Buffer, password: Buffer) => boolean;
 
@@ -28,7 +29,7 @@ export class ProxyServer {
   static async listen(
     stack: NetworkStack,
     dns: string,
-    port = 1088,
+    { host, port }: Listen,
     auth?: ProxyAuth,
   ): Promise<ProxyServer> {
     const clients = new Set<Socket>();
@@ -54,7 +55,7 @@ export class ProxyServer {
       });
     });
 
-    server.listen(port, "127.0.0.1");
+    server.listen(port, host);
     await once(server, "listening");
     const address = server.address();
     if (typeof address !== "object" || !address) throw new Error("Proxy listener has no address");

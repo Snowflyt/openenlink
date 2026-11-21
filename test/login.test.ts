@@ -328,7 +328,11 @@ await test("Renew an expired session with the session cookies, then the password
     Promise.reject(new PolicyError("Mock authorization complete")),
   );
   const run = () =>
-    serve({ server: "https://vpn.example.test" }, { port: 1088 }, new AbortController().signal);
+    serve(
+      { server: "https://vpn.example.test" },
+      { host: "127.0.0.1", port: 1088 },
+      new AbortController().signal,
+    );
 
   cas.posts = [];
   await assert.rejects(run(), /Mock authorization complete/);

@@ -1,6 +1,6 @@
 import { createSocket } from "node:dgram";
 import { once } from "node:events";
-import { isIPv4 } from "node:net";
+import { isIPv4, isIPv6 } from "node:net";
 import type { Socket } from "node:net";
 
 import type { NetworkStack, UdpSocket } from "#tcpip";
@@ -26,10 +26,25 @@ async function target(reader: ByteReader, kind: number): Promise<Target> {
   return { host, port: (await reader.read(2)).readUInt16BE() };
 }
 
-function reply(status: number, port = 0): Buffer {
-  const packet = Buffer.from([5, status, 0, 1, 127, 0, 0, 1, 0, 0]);
-  packet.writeUInt16BE(port, 8);
-  return packet;
+// A SOCKS address: type 1 and four bytes for IPv4, type 4 and sixteen bytes for IPv6, then the port.
+function address(host: string, port: number): Buffer {
+  const groups = (part: string) =>
+    part ? part.split(":").map((group) => parseInt(group, 16)) : [];
+  let bytes: number[];
+  if (isIPv4(host)) bytes = [1, ...host.split(".").map(Number)];
+  else {
+    // "::" stands for the zero groups between head and tail.
+    const [head, tail = []] = host.split("::").map(groups);
+    const zeros = Array<number>(8 - head.length - tail.length).fill(0);
+    bytes = [4, ...[...head, ...zeros, ...tail].flatMap((word) => [word >> 8, word & 255])];
+  }
+  const field = Buffer.from([...bytes, 0, 0]);
+  field.writeUInt16BE(port, field.length - 2);
+  return field;
+}
+
+function reply(status: number, host = "127.0.0.1", port = 0): Buffer {
+  return Buffer.concat([Buffer.from([5, status, 0]), address(host, port)]);
 }
 
 export async function serveSocks(
@@ -108,7 +123,12 @@ async function associate(
   signal: AbortSignal,
   destination: Target,
 ): Promise<void> {
-  const local = createSocket("udp4");
+  // The relay listens on the address the client reached and takes datagrams from the client's
+  // address. Node.js reports IPv4 clients of an IPv6 listener as ::ffff:a.b.c.d.
+  const unmap = (host = "") => host.replace(/^::ffff:(?=[\d.]+$)/, "");
+  const relayHost = unmap(control.localAddress);
+  const clientHost = unmap(control.remoteAddress);
+  const local = createSocket(isIPv6(relayHost) ? "udp6" : "udp4");
   const remote = await stack.udp.open();
   const writer = remote.writable.getWriter();
   let clientPort = destination.port;
@@ -116,7 +136,7 @@ async function associate(
 
   local.on("error", () => control.destroy());
   local.on("message", (packet, source) => {
-    if (source.address !== "127.0.0.1" || (clientPort !== 0 && source.port !== clientPort)) return;
+    if (source.address !== clientHost || (clientPort !== 0 && source.port !== clientPort)) return;
     if (packet.length < 4 || packet.readUInt16BE() !== 0 || packet[2] !== 0) return;
 
     let offset: number;
@@ -138,15 +158,15 @@ async function associate(
     void sendQueue.catch(() => control.destroy());
   });
 
-  local.bind(0, "127.0.0.1");
+  local.bind(0, relayHost);
   await once(local, "listening");
   control.setTimeout(0);
-  await write(control, reply(0, local.address().port));
+  await write(control, reply(0, relayHost, local.address().port));
 
   try {
     await Promise.race([
       relayDatagrams(remote, (packet) => {
-        if (clientPort) local.send(packet, clientPort, "127.0.0.1");
+        if (clientPort) local.send(packet, clientPort, clientHost);
       }),
       reader.chunk(),
     ]);
@@ -160,9 +180,6 @@ async function associate(
 
 async function relayDatagrams(remote: UdpSocket, send: (packet: Buffer) => void): Promise<void> {
   for await (const packet of remote) {
-    if (!isIPv4(packet.host)) continue;
-    const header = Buffer.from([0, 0, 0, 1, ...packet.host.split(".").map(Number), 0, 0]);
-    header.writeUInt16BE(packet.port, 8);
-    send(Buffer.concat([header, packet.data]));
+    send(Buffer.concat([Buffer.from([0, 0, 0]), address(packet.host, packet.port), packet.data]));
   }
 }
