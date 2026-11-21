@@ -38,6 +38,7 @@ npm run format
 | `src/worker.ts`, `src/tunnel.ts`, `src/protocol.ts`, `src/packet.ts`        | The tunnel, which runs in a worker thread: TLS frames and the TCP/IP stack |
 | `src/proxy.ts`, `src/socks.ts`, `src/http.ts`, `src/relay.ts`, `src/dns.ts` | The local proxy and its resolver                                           |
 | `src/nc.ts`                                                                 | The `nc` command                                                           |
+| `src/forward.ts`                                                            | Port forwarding for `serve --forward`                                      |
 | `src/config.ts`, `src/credentials.ts`, `src/keyring.ts`                     | Settings and credential storage                                            |
 | `src/json.ts`                                                               | Field checks for parsed JSON                                               |
 | `src/stream.ts`                                                             | Byte reads and writes on sockets and TLS streams                           |

@@ -7,6 +7,7 @@ openenlink login [https://vpn.example.edu] [--user name] [--remember] [--browser
                  [--insecure-storage] [--user-agent text]
 openenlink serve [--bind 127.0.0.1] [--port 1088] [--proxy-user name]
                  [--add-host name=address]...
+                 [--forward port:host:hostport[/udp]]...
 openenlink nc host port [--port 1088]
 openenlink status
 openenlink logout
@@ -117,6 +118,16 @@ Host *.example.edu
 ```
 
 可执行文件不在 `PATH` 里时填写完整路径。`serve` 使用其他端口时，`nc` 加上 `--port`。`nc` 不发送代理密码，所以对应的 `serve` 启动时不能带 `--proxy-user`。
+
+## 端口转发
+
+`--forward port:host:hostport` 让 `serve` 另外监听一个端口，把该端口上的每个连接接到隧道内的 `host:hostport`。没有代理设置的程序（如数据库客户端和远程桌面）连接这个本地端口即可。转发 UDP 时加上 `/udp`。多个端口重复使用该选项。
+
+```sh
+openenlink serve --forward 15432:db.example.edu:5432 --forward 10053:10.0.0.53:53/udp
+```
+
+转发端口监听在 `--bind` 指定的地址上，不要求代理密码，能访问该地址的客户端都能使用。
 
 ## 查看和删除已保存的凭据
 

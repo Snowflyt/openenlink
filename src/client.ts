@@ -7,6 +7,7 @@ import { credentialStore } from "./config.ts";
 import type { Config } from "./config.ts";
 import { AuthenticationError, Controller, PolicyError, tunnelRules } from "./controller.ts";
 import type { CredentialStore, Credentials, RememberedPassword } from "./credentials.ts";
+import type { Forward } from "./forward.ts";
 import { WrongPassword, login } from "./login.ts";
 import type { ProxyAuth } from "./proxy.ts";
 import type { Gateway } from "./tunnel.ts";
@@ -14,7 +15,13 @@ import type { TunnelOptions } from "./worker.ts";
 
 export async function serve(
   config: Config,
-  listener: { host: string; port: number; auth?: ProxyAuth; hosts: Map<string, string> },
+  listener: {
+    host: string;
+    port: number;
+    auth?: ProxyAuth;
+    hosts: Map<string, string>;
+    forwards: Forward[];
+  },
   signal: AbortSignal,
 ): Promise<void> {
   const store = credentialStore(config);
@@ -148,6 +155,10 @@ async function runWorker(options: TunnelOptions, signal: AbortSignal): Promise<v
   worker.once("message", () => {
     const host = options.host.includes(":") ? `[${options.host}]` : options.host;
     console.log(`Proxy listening on ${host}:${options.port}`);
+    for (const rule of options.forwards) {
+      const local = `${host}:${rule.port}${rule.udp ? "/udp" : ""}`;
+      console.log(`Forwarding ${local} to ${rule.host}:${rule.hostPort}`);
+    }
   });
 
   try {

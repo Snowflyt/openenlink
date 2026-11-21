@@ -8,6 +8,7 @@ import { credentialStore, loadConfig, portNumber, saveConfig } from "./config.ts
 import type { Config } from "./config.ts";
 import { AuthenticationError, Controller, serverOrigin } from "./controller.ts";
 import { hostName } from "./dns.ts";
+import type { Forward } from "./forward.ts";
 import { showImage } from "./image.ts";
 import { WrongPassword, login, pastedLogin } from "./login.ts";
 import type { SignIn } from "./login.ts";
@@ -19,6 +20,7 @@ const USAGE = `Usage:
                    [--insecure-storage] [--user-agent text]
   openenlink serve [--bind 127.0.0.1] [--port 1088] [--proxy-user name]
                    [--add-host name=address]...
+                   [--forward port:host:hostport[/udp]]...
   openenlink nc host port [--port 1088]
   openenlink status
   openenlink logout`;
@@ -156,6 +158,7 @@ async function main(): Promise<void> {
       options: {
         "add-host": { multiple: true, type: "string" },
         bind: { type: "string" },
+        forward: { multiple: true, type: "string" },
         port: { type: "string" },
         "proxy-user": { type: "string" },
       },
@@ -172,6 +175,19 @@ async function main(): Promise<void> {
         throw new UsageError("--add-host needs a name and an IPv4 address, as name=address");
       hosts.set(name, address);
     }
+    const forwards: Forward[] = [];
+    for (const entry of values.forward ?? []) {
+      const [, port, target = "", hostPort, protocol] =
+        /^(\d+):([^:]+):(\d+)(?:\/(tcp|udp))?$/.exec(entry) ?? [];
+      if (!port || !hostPort || !hostName(target) || Buffer.byteLength(target) > 255)
+        throw new UsageError("--forward needs port:host:hostport, with /udp for UDP");
+      forwards.push({
+        host: target,
+        hostPort: portNumber(hostPort),
+        port: portNumber(port),
+        udp: protocol === "udp",
+      });
+    }
     const config = await loadConfig();
     if (!config) throw new AuthenticationError("Run openenlink login first");
     const username = values["proxy-user"];
@@ -181,15 +197,21 @@ async function main(): Promise<void> {
       );
     if (auth && Object.values(auth).some((value) => !value || Buffer.byteLength(value) > 255))
       throw new UsageError("Proxy username and password must be 1 to 255 bytes");
-    if (!auth && !/^127\.|^::1$/.test(host))
-      console.error("Other machines can use the proxy without a password; --proxy-user sets one");
+    if (!/^127\.|^::1$/.test(host)) {
+      if (!auth)
+        console.error("Other machines can use the proxy without a password; --proxy-user sets one");
+      else if (forwards.length)
+        console.error("Other machines can use the forwarded ports without a password");
+    }
 
     const controller = new AbortController();
     process.once("SIGINT", () => controller.abort());
     process.once("SIGTERM", () => controller.abort());
-    await serve(config, { auth, host, hosts, port }, controller.signal).catch((error: unknown) => {
-      if (!controller.signal.aborted) throw error;
-    });
+    await serve(config, { auth, forwards, host, hosts, port }, controller.signal).catch(
+      (error: unknown) => {
+        if (!controller.signal.aborted) throw error;
+      },
+    );
     return;
   }
 

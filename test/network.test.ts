@@ -16,6 +16,7 @@ import { generate } from "selfsigned";
 import { createStack } from "#tcpip";
 
 import { Resolver } from "../src/dns.ts";
+import { forward } from "../src/forward.ts";
 import { ProxyServer } from "../src/proxy.ts";
 import type { ProxyAuth } from "../src/proxy.ts";
 import { ByteReader, write } from "../src/stream.ts";
@@ -170,12 +171,12 @@ async function exercise(): Promise<void> {
   const gateway = { host: "127.0.0.1", port: address.port, serverName: "gateway.test" };
   await assert.rejects(Tunnel.connect(gateway, "student", "secret"));
   const tunnel = await Tunnel.connect(gateway, "student", "secret", { ca: pems.cert });
-  const proxy = await ProxyServer.listen(
+  const resolver = new Resolver(
     tunnel.stack,
-    new Resolver(tunnel.stack, tunnel.dnsServer, new Map([["fixed.test", "10.88.0.1"]])),
-    { host: bind, port: 0 },
-    auth,
+    tunnel.dnsServer,
+    new Map([["fixed.test", "10.88.0.1"]]),
   );
+  const proxy = await ProxyServer.listen(tunnel.stack, resolver, { host: bind, port: 0 }, auth);
   void tunnel.done.catch(() => {});
 
   const credentials = (password: string) => {
@@ -329,6 +330,36 @@ async function exercise(): Promise<void> {
   assert.deepEqual(response, Buffer.from([0, 0, 0, 1, 10, 88, 0, 1, 31, 145, 97, 98, 99]));
   udp.close();
   control.destroy();
+
+  // A forwarded port joins its clients to one address in the tunnel, over TCP or UDP.
+  const tcpForward = await forward(tunnel.stack, resolver, bind, {
+    host: "intranet.test",
+    hostPort: 8080,
+    port: 0,
+    udp: false,
+  });
+  const piped = connect(tcpForward.port, "127.0.0.1");
+  const pipedReader = new ByteReader(piped);
+  await write(piped, payload);
+  assert.deepEqual(await pipedReader.read(payload.length), payload);
+  piped.end();
+  assert.equal(await pipedReader.chunk(), undefined);
+  await tcpForward.close();
+
+  const udpForward = await forward(tunnel.stack, resolver, bind, {
+    host: "10.88.0.1",
+    hostPort: 8081,
+    port: 0,
+    udp: true,
+  });
+  const client = createSocket("udp4");
+  client.bind(0, "127.0.0.1");
+  await once(client, "listening");
+  const echoed = once(client, "message");
+  client.send(Buffer.from("ping"), udpForward.port, "127.0.0.1");
+  assert.deepEqual((await echoed)[0], Buffer.from("ping"));
+  client.close();
+  await udpForward.close();
   await proxy.close();
   tunnel.close();
   parentPort!.postMessage({ dns: true, tcp: true, udp: true });

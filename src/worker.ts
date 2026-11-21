@@ -1,6 +1,8 @@
 import { parentPort, workerData } from "node:worker_threads";
 
 import { Resolver } from "./dns.ts";
+import { forward } from "./forward.ts";
+import type { Forward } from "./forward.ts";
 import { ProxyServer } from "./proxy.ts";
 import type { ProxyAuth } from "./proxy.ts";
 import { Tunnel } from "./tunnel.ts";
@@ -14,6 +16,7 @@ export type TunnelOptions = {
   port: number;
   auth?: ProxyAuth;
   hosts: Map<string, string>;
+  forwards: Forward[];
 };
 
 const options = workerData as TunnelOptions;
@@ -21,11 +24,14 @@ const tunnel = await Tunnel.connect(options.gateway, options.user, options.token
 void tunnel.done.catch(() => {});
 const resolver = new Resolver(tunnel.stack, tunnel.dnsServer, options.hosts);
 const proxy = await ProxyServer.listen(tunnel.stack, resolver, options, options.auth);
+const forwards = await Promise.all(
+  options.forwards.map((rule) => forward(tunnel.stack, resolver, options.host, rule)),
+);
 parentPort!.postMessage({ port: proxy.port });
 
 try {
   await tunnel.done;
 } finally {
-  await proxy.close();
+  await Promise.all([proxy.close(), ...forwards.map((forwarding) => forwarding.close())]);
   tunnel.close();
 }

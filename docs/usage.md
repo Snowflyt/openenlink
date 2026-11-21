@@ -7,6 +7,7 @@ openenlink login [https://vpn.example.edu] [--user name] [--remember] [--browser
                  [--insecure-storage] [--user-agent text]
 openenlink serve [--bind 127.0.0.1] [--port 1088] [--proxy-user name]
                  [--add-host name=address]...
+                 [--forward port:host:hostport[/udp]]...
 openenlink nc host port [--port 1088]
 openenlink status
 openenlink logout
@@ -117,6 +118,16 @@ Host *.example.edu
 ```
 
 Give the full path of the executable when it is outside `PATH`. `nc` takes `--port` when `serve` uses another port. It sends no proxy password, so it needs a `serve` started without `--proxy-user`.
+
+## Forward ports
+
+`--forward port:host:hostport` makes `serve` listen on another port as well and join each connection on it to `host:hostport` inside the tunnel. Programs without proxy settings, such as database clients and remote desktop, then connect to the local port. Add `/udp` to forward UDP. Repeat the option for more ports.
+
+```sh
+openenlink serve --forward 15432:db.example.edu:5432 --forward 10053:10.0.0.53:53/udp
+```
+
+Forwarded ports listen on the `--bind` address and take no proxy password, so any client that reaches the address can use them.
 
 ## Check and remove saved credentials
 
