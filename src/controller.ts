@@ -1,6 +1,6 @@
 import { createHash, randomInt } from "node:crypto";
 
-import { Agent } from "undici";
+import type Agent from "undici/lib/dispatcher/agent.js";
 
 import { object, text } from "./json.ts";
 import { ipv4Address } from "./protocol.ts";
@@ -47,16 +47,21 @@ export function requestFailure(url: URL, error: unknown): Error {
   );
 }
 
+// undici alone gives up on a connection after 10 seconds, the name lookup included, and a slow
+// network needs longer. The limit stays on because nothing else ends a connection that stalls
+// while opening: a signal ends the request and leaves the socket. undici loads Node's TLS and
+// HTTP/2 modules, which add about 150 ms to the start and exit of every command on Windows, so
+// the Agent loads with the first request.
+export async function connectionAgent(): Promise<Agent> {
+  const { default: Agent } = await import("undici/lib/dispatcher/agent.js");
+  return new Agent({ connect: { rejectUnauthorized: true, timeout: 60_000 } });
+}
+
 export class Controller {
   readonly origin: string;
   private readonly fetch: typeof globalThis.fetch;
   private readonly userAgent: string | undefined;
-  // undici alone gives up on a connection after 10 seconds, the name lookup included, and a slow
-  // network needs longer. The limit stays on because nothing else ends a connection that stalls
-  // while opening: a signal ends the request and leaves the socket.
-  private readonly dispatcher = new Agent({
-    connect: { rejectUnauthorized: true, timeout: 60_000 },
-  });
+  private dispatcher: Promise<Agent> | undefined;
 
   constructor(
     server: string,
@@ -81,9 +86,10 @@ export class Controller {
       throw new Error("Controller endpoint belongs to another server");
     const json = body === undefined ? undefined : JSON.stringify(body);
     const authorization = token ? `Bearer ${token}` : "";
+    this.dispatcher ??= connectionAgent();
     const options = {
       body: json,
-      dispatcher: this.dispatcher,
+      dispatcher: await this.dispatcher,
       headers: {
         ...signature(url, authorization, json),
         "Content-Type": "application/json",
@@ -150,7 +156,7 @@ export class Controller {
   }
 
   async close(): Promise<void> {
-    await this.dispatcher.close();
+    await (await this.dispatcher)?.close();
   }
 }
 

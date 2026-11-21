@@ -2,18 +2,15 @@
 // followed one hop at a time so every request stays on HTTPS and a posted password never
 // travels to a second address.
 
-import { Agent } from "undici";
+import type Agent from "undici/lib/dispatcher/agent.js";
 
-import { requestFailure } from "./controller.ts";
+import { connectionAgent, requestFailure } from "./controller.ts";
 
 export type Cookie = { name: string; value: string; host: string; path: string; expires?: number };
 
 const HOPS = 12;
 
-// undici alone gives up on a connection after 10 seconds, the name lookup included, and a slow
-// network needs longer. The limit stays on because nothing else ends a connection that stalls
-// while opening: a signal ends the request and leaves the socket.
-const dispatcher = new Agent({ connect: { timeout: 60_000 } });
+let dispatcher: Promise<Agent> | undefined;
 
 export class Page {
   readonly url: URL;
@@ -89,9 +86,10 @@ export class Web {
       .filter((cookie) => pathMatches(url.pathname, cookie.path))
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join("; ");
+    dispatcher ??= connectionAgent();
     const options = {
       ...(form ? { body: form.body, method: "POST" } : {}),
-      dispatcher,
+      dispatcher: await dispatcher,
       headers: {
         ...(cookies ? { Cookie: cookies } : {}),
         ...(form ? { Referer: form.referer.href } : {}),
