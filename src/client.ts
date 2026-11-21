@@ -59,7 +59,7 @@ export async function serve(
       // Another client on the same account ends our tunnel right after it starts; growing the
       // delay keeps the two from replacing each other every second.
       if (lived > 60_000) retry = 1000;
-      console.error(`Reconnecting in ${retry / 1000} seconds`);
+      console.error(`Reconnecting in ${retry / 1000} second${retry === 1000 ? "" : "s"}`);
       await setTimeout(retry, undefined, { signal });
       retry = Math.min(retry * 2, 30_000);
     }
