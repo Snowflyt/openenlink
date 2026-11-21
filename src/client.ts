@@ -114,7 +114,8 @@ async function renew(
       signal,
       ...(password.cookies ? { cookies: password.cookies } : {}),
       ...(userAgent ? { userAgent } : {}),
-      account: async (origin) => {
+      account: async (origin, failure) => {
+        if (failure) return;
         if (origin !== password.origin)
           throw new AuthenticationError(
             "The sign-in page moved to another site; run openenlink login --remember",

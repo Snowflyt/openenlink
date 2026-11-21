@@ -10,7 +10,7 @@ import { AuthenticationError, Controller, serverOrigin } from "./controller.ts";
 import { hostName } from "./dns.ts";
 import type { Forward } from "./forward.ts";
 import { showImage } from "./image.ts";
-import { WrongPassword, login, pastedLogin } from "./login.ts";
+import { login, pastedLogin } from "./login.ts";
 import type { SignIn } from "./login.ts";
 import { nc } from "./nc.ts";
 import { ask, askPaste, askSecret } from "./prompt.ts";
@@ -33,48 +33,45 @@ class UsageError extends Error {}
 // username or captcha, moves the sign-in to a browser. login --browser starts there.
 async function signIn(entry: URL, config: Config, user?: string): Promise<SignIn> {
   let username = user ?? config.user;
-  for (let attempt = 1; ; attempt++) {
-    try {
-      return await login(entry, {
-        ...(config.userAgent ? { userAgent: config.userAgent } : {}),
-        account: async (origin) => {
-          const host = new URL(origin).host;
-          if (user && attempt === 1) {
-            console.log(`Type the password for ${user} at ${host} below.`);
-          } else {
-            if (attempt === 1) {
-              console.log(`Type your ${host} username and password below.`);
-              if (!username)
-                console.log("Leave the username empty to sign in with a browser instead.");
-            }
-            const typed = await ask(
-              username ? `Username (press Enter for ${username}): ` : "Username: ",
-            );
-            username = typed || username;
+  let attempt = 0;
+  try {
+    return await login(entry, {
+      ...(config.userAgent ? { userAgent: config.userAgent } : {}),
+      account: async (origin, failure) => {
+        if (++attempt > PASSWORD_ATTEMPTS) return;
+        if (failure) console.error(failure);
+        const host = new URL(origin).host;
+        if (user && attempt === 1) {
+          console.log(`Type the password for ${user} at ${host} below.`);
+        } else {
+          if (attempt === 1) {
+            console.log(`Type your ${host} username and password below.`);
+            if (!username)
+              console.log("Leave the username empty to sign in with a browser instead.");
           }
-          if (!username) return;
-          return { username, password: await askSecret("Password (hidden): ") };
-        },
-        captcha: async (image) => {
-          const cleanup = await showImage(image);
-          try {
-            return await ask(
-              "Type the characters in the image (press Enter alone to use a browser): ",
-            );
-          } finally {
-            await cleanup();
-          }
-        },
-      });
-    } catch (error) {
-      if (error instanceof WrongPassword && attempt < PASSWORD_ATTEMPTS) {
-        console.error(error.message);
-        continue;
-      }
-      if (!(error instanceof UnsupportedLogin)) throw error;
-      if (error.message) console.error(error.message);
-      return { credentials: await browserSignIn(entry, config.userAgent), cookies: [] };
-    }
+          const typed = await ask(
+            username ? `Username (press Enter for ${username}): ` : "Username: ",
+          );
+          username = typed || username;
+        }
+        if (!username) return;
+        return { username, password: await askSecret("Password (hidden): ") };
+      },
+      captcha: async (image) => {
+        const cleanup = await showImage(image);
+        try {
+          return await ask(
+            "Type the characters in the image (press Enter alone to use a browser): ",
+          );
+        } finally {
+          await cleanup();
+        }
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof UnsupportedLogin)) throw error;
+    if (error.message) console.error(error.message);
+    return { credentials: await browserSignIn(entry, config.userAgent), cookies: [] };
   }
 }
 

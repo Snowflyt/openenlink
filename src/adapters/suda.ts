@@ -63,7 +63,8 @@ export const suda: Adapter = {
     const code = spans.find((span) => span.id === "errorcode")?.value ?? "";
     const message = printable(spans.find((span) => span.id === "errormes")?.value ?? "");
     const known = /^[A-Z_]{1,64}$/.test(code) ? code : "";
-    if (PASSWORD.some((name) => known.includes(name)))
+    // A wrong password comes back without a code, only with the message.
+    if (PASSWORD.some((name) => known.includes(name)) || (!code && message.includes("密码错误")))
       return { reason: "password", message: "Wrong username or password" };
     if (CAPTCHA.some((name) => known.includes(name)))
       return { reason: "captcha", message: "Wrong or expired captcha" };

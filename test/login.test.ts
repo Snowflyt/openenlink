@@ -22,6 +22,8 @@ const cas = {
   password: "right-password",
   form: "normal" as "normal" | "changed",
   captcha: false,
+  // A wrong password turns the captcha on, as the real page does after failures.
+  captchaAfterMiss: false,
   rejectCodes: false,
   sessions: new Set<string>(),
   tickets: new Set<string>(),
@@ -138,8 +140,10 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     cas.posts.push({ body, referer: request.headers.referer });
     if (cas.captcha && (body.get("captcha") !== "right" || body.get("token") !== "captcha"))
       return html(401, page("INVALID_CAPTCHA", "验证码错误"));
-    if (body.get("password") !== cas.password)
-      return html(401, page("INVALID_PASSWORD", "用户名或密码错误"));
+    if (body.get("password") !== cas.password) {
+      if (cas.captchaAfterMiss) cas.captcha = true;
+      return html(401, page("", "您输入的用户名或密码错误"));
+    }
     response.writeHead(302, {
       Location: `/sso/login?ticket=${issue(cas.tickets)}`,
       "Set-Cookie": `CASTGC=${issue(cas.sessions)}; Path=/cas/; Secure; HttpOnly`,
@@ -159,6 +163,7 @@ function reset() {
     password: "right-password",
     form: "normal",
     captcha: false,
+    captchaAfterMiss: false,
     rejectCodes: false,
     posts: [],
     unexpected: 0,
@@ -168,9 +173,11 @@ function reset() {
 
 const typed =
   (origins: string[]): LoginOptions["account"] =>
-  (origin) => {
+  (origin, failure) => {
     origins.push(origin);
-    return Promise.resolve({ username: "student", password: "right-password" });
+    return Promise.resolve(
+      failure ? undefined : { username: "student", password: "right-password" },
+    );
   };
 
 await test("Sign in on the CAS page from the terminal", async () => {
@@ -221,11 +228,36 @@ await test("Report a wrong password and a gateway refusal", async () => {
   reset();
   cas.password = "changed-password";
   await assert.rejects(login(entry, { account: typed([]) }), WrongPassword);
+  assert.equal(cas.posts.length, 1);
   reset();
   cas.rejectCodes = true;
   await assert.rejects(
     login(entry, { account: typed([]) }),
     /The gateway refused the sign-in: 未查找到用户信息/,
+  );
+});
+
+await test("Ask for the password again on the same page, with the captcha it then shows", async () => {
+  reset();
+  cas.captchaAfterMiss = true;
+  const failures: (string | undefined)[] = [];
+  const passwords = ["wrong-password", "right-password"];
+  const result = await login(entry, {
+    account: (_, failure) => {
+      failures.push(failure);
+      const password = passwords.shift();
+      return Promise.resolve(password ? { username: "student", password } : undefined);
+    },
+    captcha: () => Promise.resolve("right"),
+  });
+  assert.deepEqual(result.credentials, { accessToken: "access-token" });
+  assert.deepEqual(failures, [undefined, "Wrong username or password"]);
+  assert.deepEqual(
+    cas.posts.map(({ body }) => [body.get("password"), body.get("captcha")]),
+    [
+      ["wrong-password", null],
+      ["right-password", "right"],
+    ],
   );
 });
 

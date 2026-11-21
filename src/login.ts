@@ -21,8 +21,9 @@ export type SignIn = {
 };
 
 export type LoginOptions = {
-  // Called once the sign-in page is recognised; nothing means the browser takes over.
-  account: (origin: string) => Promise<Account | undefined>;
+  // Called once the sign-in page is recognised; nothing means the browser takes over. Called
+  // again with the page's message after a wrong password; nothing then ends the sign-in.
+  account: (origin: string, failure?: string) => Promise<Account | undefined>;
   // Shows the captcha image and returns the answer; nothing means the browser takes over.
   captcha?: (image: Buffer) => Promise<string | undefined>;
   cookies?: Cookie[];
@@ -87,10 +88,13 @@ export async function login(entry: URL, options: LoginOptions): Promise<SignIn> 
   if (form.captcha && !options.captcha)
     throw new AuthenticationError("The sign-in page asks for a captcha; run openenlink login");
   const origin = page.url.origin;
-  const account = await options.account(origin);
-  if (!account) throw new UnsupportedLogin("");
+  const typed = await options.account(origin);
+  if (!typed) throw new UnsupportedLogin("");
+  let account: Account = typed;
 
-  for (let attempt = 1; ; attempt++) {
+  // A wrong password is asked for again on the page that rejected it, so a captcha that the
+  // provider starts after failures is shown rather than left behind with a fresh session.
+  for (let misses = 0; ;) {
     let answer: string | undefined;
     if (form.captcha && options.captcha) {
       answer = await options.captcha(await form.captcha());
@@ -109,9 +113,14 @@ export async function login(entry: URL, options: LoginOptions): Promise<SignIn> 
       };
     }
     const failure = adapter.failure(result);
-    if (failure.reason === "password") throw new WrongPassword(failure.message);
-    const next = failure.reason === "captcha" ? adapter.form(result, web) : undefined;
-    if (!next || attempt === CAPTCHA_ATTEMPTS) throw new AuthenticationError(failure.message);
+    const next = failure.reason === "other" ? undefined : adapter.form(result, web);
+    if (failure.reason === "password") {
+      const retry = next && (await options.account(origin, failure.message));
+      if (!next || !retry) throw new WrongPassword(failure.message);
+      account = retry;
+    } else if (!next || ++misses === CAPTCHA_ATTEMPTS) {
+      throw new AuthenticationError(failure.message);
+    }
     page = result;
     form = next;
   }
