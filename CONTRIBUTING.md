@@ -39,6 +39,7 @@ npm run format
 | `src/proxy.ts`, `src/socks.ts`, `src/http.ts`, `src/relay.ts`, `src/dns.ts` | The local proxy and its resolver                                           |
 | `src/nc.ts`                                                                 | The `nc` command                                                           |
 | `src/config.ts`, `src/credentials.ts`, `src/keyring.ts`                     | Settings and credential storage                                            |
+| `src/json.ts`                                                               | Field checks for parsed JSON                                               |
 | `test/`                                                                     | Tests for the Node.js test runner                                          |
 | `vendor/`                                                                   | The tcpip.js and lwIP submodules, with `tcpip.js.patch`                    |
 | `docs/`                                                                     | User and contributor documentation                                         |

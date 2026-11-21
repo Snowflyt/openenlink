@@ -2,6 +2,7 @@ import { createHash, randomInt } from "node:crypto";
 
 import { Agent } from "undici";
 
+import { object, text } from "./json.ts";
 import { ipv4Address } from "./protocol.ts";
 import type { Gateway } from "./tunnel.ts";
 
@@ -15,18 +16,6 @@ export function serverOrigin(server: string): string {
   }
   if (url.pathname !== "/") throw new Error("Server must be an HTTPS origin without a path");
   return url.origin;
-}
-
-export function object(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Controller returned an invalid object");
-  }
-  return value as Record<string, unknown>;
-}
-
-export function text(value: unknown, field: string): string {
-  if (typeof value !== "string" || !value.length) throw new Error(`Controller omitted ${field}`);
-  return value;
 }
 
 export function signature(

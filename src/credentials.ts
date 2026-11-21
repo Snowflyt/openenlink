@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { text } from "./controller.ts";
+import { text } from "./json.ts";
 import { osKeyring } from "./keyring.ts";
 import type { Cookie } from "./web.ts";
 

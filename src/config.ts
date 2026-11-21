@@ -2,8 +2,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 
-import { object, serverOrigin, text } from "./controller.ts";
+import { serverOrigin } from "./controller.ts";
 import { CredentialStore } from "./credentials.ts";
+import { object, text } from "./json.ts";
 
 export type Config = {
   server: string;

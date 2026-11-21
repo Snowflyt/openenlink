@@ -5,7 +5,7 @@
 
 import { UnsupportedLogin } from "../adapter.ts";
 import type { Adapter } from "../adapter.ts";
-import { object, text } from "../controller.ts";
+import { object, text } from "../json.ts";
 import { printable, tags } from "../web.ts";
 
 const FIELDS = ["_eventId", "execution", "lt", "pid", "source"];
