@@ -5,7 +5,7 @@ import type { Server, Socket } from "node:net";
 
 import type { NetworkStack } from "#tcpip";
 
-import { Resolver } from "./dns.ts";
+import type { Resolver } from "./dns.ts";
 import { serveHttp } from "./http.ts";
 import { serveSocks } from "./socks.ts";
 import { ByteReader } from "./stream.ts";
@@ -28,12 +28,11 @@ export class ProxyServer {
 
   static async listen(
     stack: NetworkStack,
-    dns: string,
+    resolver: Resolver,
     { host, port }: Listen,
     auth?: ProxyAuth,
   ): Promise<ProxyServer> {
     const clients = new Set<Socket>();
-    const resolver = new Resolver(stack, dns);
     // Comparing digests keeps the time independent of where the inputs differ.
     const digest = (value: Buffer | string) => createHash("sha256").update(value).digest();
     const authorize =

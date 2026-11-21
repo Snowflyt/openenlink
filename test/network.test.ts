@@ -15,6 +15,7 @@ import { generate } from "selfsigned";
 
 import { createStack } from "#tcpip";
 
+import { Resolver } from "../src/dns.ts";
 import { ProxyServer } from "../src/proxy.ts";
 import type { ProxyAuth } from "../src/proxy.ts";
 import { ByteReader, write } from "../src/stream.ts";
@@ -171,7 +172,7 @@ async function exercise(): Promise<void> {
   const tunnel = await Tunnel.connect(gateway, "student", "secret", { ca: pems.cert });
   const proxy = await ProxyServer.listen(
     tunnel.stack,
-    tunnel.dnsServer,
+    new Resolver(tunnel.stack, tunnel.dnsServer, new Map([["fixed.test", "10.88.0.1"]])),
     { host: bind, port: 0 },
     auth,
   );
@@ -263,6 +264,19 @@ async function exercise(): Promise<void> {
   assert.deepEqual(await tunneledReader.read(payload.length), payload);
   tunneled.end();
   assert.equal(await tunneledReader.chunk(), undefined);
+
+  // A fixed entry answers without a query, which the DNS server above would reject.
+  const fixed = connect(proxy.port, "127.0.0.1");
+  const fixedReader = new ByteReader(fixed);
+  await write(
+    fixed,
+    Buffer.from(["CONNECT Fixed.Test.:8080 HTTP/1.1", ...authorization, "", ""].join("\r\n")),
+  );
+  assert.equal(
+    (await fixedReader.until("\r\n\r\n", 1024)).toString(),
+    "HTTP/1.1 200 Connection Established",
+  );
+  fixed.destroy();
 
   // The echo server returns the request exactly as the proxy forwarded it.
   const forwarded = connect(proxy.port, "127.0.0.1");

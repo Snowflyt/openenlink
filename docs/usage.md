@@ -6,6 +6,7 @@ English | [简体中文](usage.zh-CN.md)
 openenlink login [https://vpn.example.edu] [--user name] [--remember] [--browser]
                  [--insecure-storage] [--user-agent text]
 openenlink serve [--bind 127.0.0.1] [--port 1088] [--proxy-user name]
+                 [--add-host name=address]...
 openenlink nc host port [--port 1088]
 openenlink status
 openenlink logout
@@ -81,6 +82,8 @@ curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
 ```
 
 Internal host names resolve only through the gateway's resolver inside the tunnel. Pass names to the proxy with `socks5h://` or `--socks5-hostname` so that it resolves them.
+
+`--add-host name=address` gives a name a fixed IPv4 address, for internal hosts that the gateway's resolver does not know. Repeat it for more names.
 
 Tools that read `http_proxy` and `https_proxy`, such as git and pip, take `http://127.0.0.1:1088`.
 

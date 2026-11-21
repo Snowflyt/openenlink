@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { isIP } from "node:net";
+import { isIP, isIPv4 } from "node:net";
 import { parseArgs } from "node:util";
 
 import { UnsupportedLogin } from "./adapter.ts";
@@ -7,6 +7,7 @@ import { serve } from "./client.ts";
 import { credentialStore, loadConfig, portNumber, saveConfig } from "./config.ts";
 import type { Config } from "./config.ts";
 import { AuthenticationError, Controller, serverOrigin } from "./controller.ts";
+import { hostName } from "./dns.ts";
 import { showImage } from "./image.ts";
 import { WrongPassword, login, pastedLogin } from "./login.ts";
 import type { SignIn } from "./login.ts";
@@ -17,6 +18,7 @@ const USAGE = `Usage:
   openenlink login [https://vpn.example.edu] [--user name] [--remember] [--browser]
                    [--insecure-storage] [--user-agent text]
   openenlink serve [--bind 127.0.0.1] [--port 1088] [--proxy-user name]
+                   [--add-host name=address]...
   openenlink nc host port [--port 1088]
   openenlink status
   openenlink logout`;
@@ -152,6 +154,7 @@ async function main(): Promise<void> {
     const { values } = parseArgs({
       args,
       options: {
+        "add-host": { multiple: true, type: "string" },
         bind: { type: "string" },
         port: { type: "string" },
         "proxy-user": { type: "string" },
@@ -160,6 +163,15 @@ async function main(): Promise<void> {
     const host = values.bind ?? "127.0.0.1";
     if (!isIP(host)) throw new UsageError("--bind needs an IP address");
     const port = portNumber(values.port ?? 1088);
+    const hosts = new Map<string, string>();
+    for (const entry of values["add-host"] ?? []) {
+      const at = entry.indexOf("=");
+      const name = hostName(entry.slice(0, at));
+      const address = entry.slice(at + 1);
+      if (at < 0 || !name || !isIPv4(address))
+        throw new UsageError("--add-host needs a name and an IPv4 address, as name=address");
+      hosts.set(name, address);
+    }
     const config = await loadConfig();
     if (!config) throw new AuthenticationError("Run openenlink login first");
     const username = values["proxy-user"];
@@ -175,7 +187,7 @@ async function main(): Promise<void> {
     const controller = new AbortController();
     process.once("SIGINT", () => controller.abort());
     process.once("SIGTERM", () => controller.abort());
-    await serve(config, { auth, host, port }, controller.signal).catch((error: unknown) => {
+    await serve(config, { auth, host, hosts, port }, controller.signal).catch((error: unknown) => {
       if (!controller.signal.aborted) throw error;
     });
     return;

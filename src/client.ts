@@ -14,7 +14,7 @@ import type { TunnelOptions } from "./worker.ts";
 
 export async function serve(
   config: Config,
-  listener: { host: string; port: number; auth?: ProxyAuth },
+  listener: { host: string; port: number; auth?: ProxyAuth; hosts: Map<string, string> },
   signal: AbortSignal,
 ): Promise<void> {
   const store = credentialStore(config);

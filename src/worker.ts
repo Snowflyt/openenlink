@@ -1,5 +1,6 @@
 import { parentPort, workerData } from "node:worker_threads";
 
+import { Resolver } from "./dns.ts";
 import { ProxyServer } from "./proxy.ts";
 import type { ProxyAuth } from "./proxy.ts";
 import { Tunnel } from "./tunnel.ts";
@@ -12,12 +13,14 @@ export type TunnelOptions = {
   host: string;
   port: number;
   auth?: ProxyAuth;
+  hosts: Map<string, string>;
 };
 
 const options = workerData as TunnelOptions;
 const tunnel = await Tunnel.connect(options.gateway, options.user, options.token);
 void tunnel.done.catch(() => {});
-const proxy = await ProxyServer.listen(tunnel.stack, tunnel.dnsServer, options, options.auth);
+const resolver = new Resolver(tunnel.stack, tunnel.dnsServer, options.hosts);
+const proxy = await ProxyServer.listen(tunnel.stack, resolver, options, options.auth);
 parentPort!.postMessage({ port: proxy.port });
 
 try {

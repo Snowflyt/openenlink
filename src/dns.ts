@@ -6,20 +6,30 @@ import packet from "dns-packet";
 
 import type { NetworkStack } from "#tcpip";
 
+// Names in lookups and in fixed entries compare in this form: ASCII, lowercase, no final dot.
+export function hostName(host: string): string {
+  return domainToASCII(host).toLowerCase().replace(/\.$/, "");
+}
+
 export class Resolver {
   private readonly stack: NetworkStack;
   private readonly server: string;
+  // Fixed addresses, keyed by hostName, that answer before the gateway's DNS.
+  private readonly hosts: ReadonlyMap<string, string>;
   private readonly cache = new Map<string, { address: string; expires: number }>();
 
-  constructor(stack: NetworkStack, server: string) {
+  constructor(stack: NetworkStack, server: string, hosts: ReadonlyMap<string, string> = new Map()) {
     this.stack = stack;
     this.server = server;
+    this.hosts = hosts;
   }
 
   async lookup(host: string, signal: AbortSignal): Promise<string> {
     if (isIPv4(host)) return host;
-    const original = domainToASCII(host).toLowerCase().replace(/\.$/, "");
+    const original = hostName(host);
     if (!original) throw new Error("Invalid hostname");
+    const fixed = this.hosts.get(original);
+    if (fixed) return fixed;
     const cached = this.cache.get(original);
     if (cached && cached.expires > Date.now()) return cached.address;
 

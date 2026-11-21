@@ -6,6 +6,7 @@
 openenlink login [https://vpn.example.edu] [--user name] [--remember] [--browser]
                  [--insecure-storage] [--user-agent text]
 openenlink serve [--bind 127.0.0.1] [--port 1088] [--proxy-user name]
+                 [--add-host name=address]...
 openenlink nc host port [--port 1088]
 openenlink status
 openenlink logout
@@ -81,6 +82,8 @@ curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
 ```
 
 内网主机名只能由隧道内的网关解析器解析。使用 `socks5h://` 或 `--socks5-hostname` 把主机名交给代理解析。
+
+`--add-host name=address` 为主机名指定固定的 IPv4 地址，用于网关解析器无法解析的内网主机。多个主机名重复使用该选项。
 
 读取 `http_proxy` 和 `https_proxy` 的工具（如 git 和 pip）填 `http://127.0.0.1:1088`。
 
