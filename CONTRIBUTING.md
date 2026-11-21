@@ -1,6 +1,6 @@
 # Contributing to openenlink
 
-Issues and pull requests are welcome. Terminal sign-in for another sign-in page is the most useful contribution; [Writing an adapter](docs/adapters/README.md) walks through it.
+Issues and pull requests are welcome. Terminal sign-in for another sign-in page is the most useful contribution, and [Writing an adapter](docs/adapters/README.md) walks through it.
 
 ## Local Setup
 
@@ -24,7 +24,7 @@ npm run lint
 npm run format
 ```
 
-`npm start --` runs the command line from source and takes the same arguments as the executable. Run the three checks before opening a pull request; CI runs them too.
+`npm start --` runs the CLI from source and takes the same arguments as the executable. Run the three checks before opening a pull request. CI runs them too.
 
 ## Project Layout
 
@@ -53,7 +53,7 @@ Tests run against servers they start themselves: a TLS gateway, a sign-in page a
 
 ## Documentation
 
-`README.md`, `docs/usage.md` and each adapter guide have a `.zh-CN.md` twin with the same content; change both together. Contributor documents are in English.
+`README.md`, `docs/usage.md` and each adapter guide have a `.zh-CN.md` twin with the same content. Change both together. Contributor documents are in English.
 
 Facts about one sign-in page or gateway belong in that adapter's guide. The general documents use `vpn.example.edu` and `intranet.example.edu`.
 
@@ -87,7 +87,7 @@ Keep one change per commit.
 
 A pull request should include:
 
-- a short description of the behavior change;
-- tests for the changed behavior;
-- documentation updates when commands, options or an adapter change;
-- for a new adapter, its guide in both languages and a row in the adapter tables of both READMEs.
+- A short description of the behavior change.
+- Tests for the changed behavior.
+- Documentation updates when commands, options or an adapter change.
+- For a new adapter, its guide in both languages and a row in the adapter tables of both READMEs.

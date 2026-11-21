@@ -25,9 +25,9 @@ openenlink login https://vpn.example.edu
 
 ### 在终端里登录
 
-登录页有[适配器](../README.zh-CN.md#适配器)时，`login` 询问用户名和密码，通过 HTTPS 提交给该登录页。用户名提示会给出上次使用的用户名，按回车就用它；`--user name` 提前回答它。输入密码时屏幕上不显示任何字符。密码错误时 `login` 会再次询问，一共三次机会。
+登录页有[适配器](../README.zh-CN.md#适配器)时，`login` 提示输入用户名和密码，通过 HTTPS 提交给该登录页。用户名默认为上次使用的账号，`--user name` 跳过该提示。密码输入不回显，密码错误时最多尝试三次。
 
-登录页要求验证码时，`login` 在终端里画出验证码图片，然后询问答案。终端不支持图片和真彩色时，图片保存为临时文件，并打印文件路径。
+登录页要求验证码时，`login` 在终端中渲染验证码并提示输入。终端不支持图片显示或真彩色时，`login` 将图片写入临时文件并输出路径。
 
 ### 在浏览器里登录
 
@@ -35,10 +35,10 @@ openenlink login https://vpn.example.edu
 openenlink login --browser
 ```
 
-`login --browser` 打印网关的登录地址。不带该选项时，登录页没有适配器，或者第一次询问用户名时留空、验证码留空，`login` 也会这样做。
+`login --browser` 输出网关的登录链接。未指定该选项时，如果登录页没有对应适配器，或在首次提示用户名、验证码时直接留空，`login` 也会切换为浏览器登录。
 
-1. 在浏览器里打开打印出的地址并登录。
-2. 复制浏览器最后停留的地址。
+1. 在浏览器里打开输出的链接并登录。
+2. 复制浏览器最终跳转的 URL。
 3. 粘贴到 `Paste (hidden):` 提示后面。
 
 该提示也接受网关的 `access_token` cookie 的值，可以从浏览器的开发者工具里复制。
@@ -57,7 +57,7 @@ openenlink login --remember
 - 遇到验证码时自动登录停止，需要重新执行 `openenlink login --remember`。
 - 之后不带 `--remember` 的 `login` 会删除已保存的密码。
 
-`--remember` 需要终端登录。浏览器登录不留下可以保存的密码，所以 `--browser` 不能和 `--remember` 一起用。
+`--remember` 仅适用于终端登录。浏览器登录不经过本机密码输入，因此不能与 `--browser` 同时使用。
 
 ### 其他登录选项
 
@@ -92,7 +92,7 @@ curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
 
 隧道断开后 `serve` 自动重连。等待时间从 1 秒开始，每次翻倍，最长 30 秒。
 
-授权过期时，`serve` 用网关的 refresh token 或已保存的登录信息续期。两者都失败时，它以状态 3 退出，需要重新执行 `openenlink login`。
+授权过期时，`serve` 用网关的 refresh token 或已保存的登录信息续期。两者都失败时，以状态 3 退出，需要重新执行 `openenlink login`。
 
 ### 多人共用的机器
 
@@ -128,7 +128,7 @@ openenlink logout
 
 ## 凭据保存在哪里
 
-网关地址、上次的用户名、`--user-agent` 的值和存储方式保存在 `config.json` 里。macOS 和 Linux 上，该文件是 `$XDG_CONFIG_HOME/openenlink/config.json`；变量未设置时是 `~/.config/openenlink/config.json`。Windows 上是 `%APPDATA%\openenlink\config.json`。
+网关地址、上次的用户名、`--user-agent` 的值和存储方式保存在 `config.json` 里。macOS 和 Linux 上，该文件是 `$XDG_CONFIG_HOME/openenlink/config.json`，变量未设置时是 `~/.config/openenlink/config.json`。Windows 上是 `%APPDATA%\openenlink\config.json`。
 
 授权和已保存的密码存入操作系统的凭据存储：macOS 的钥匙串、Windows 的凭据管理器，Linux 上则是通过 libsecret 访问的 Secret Service，例如 GNOME Keyring 或 KWallet。
 
@@ -147,6 +147,6 @@ openenlink login https://vpn.example.edu --insecure-storage
 | 0    | 命令完成。                        |
 | 1    | 命令失败，原因不属于下面两种。    |
 | 2    | 参数有误，同时打印用法。          |
-| 3    | 需要有人执行 `openenlink login`。 |
+| 3    | 需要重新执行 `openenlink login`。 |
 
 自动重启 `serve` 的脚本可以在状态 3 时停止。

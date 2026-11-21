@@ -34,7 +34,7 @@ macOS 会拦截浏览器下载的文件，清掉隔离标记后才能运行：
 xattr -d com.apple.quarantine openenlink
 ```
 
-精简的 Linux 容器镜像缺少可执行文件要加载的库。Debian 和 Ubuntu 安装 `libatomic1`。Alpine 安装 `libstdc++`，x64 再加 `libatomic`。
+精简 Linux 容器镜像缺少运行时依赖库。Debian 和 Ubuntu 需安装 `libatomic1`，Alpine 需安装 `libstdc++`，Alpine x64 还需安装 `libatomic`。
 
 其他系统（包括 Intel Mac）[从源码运行](docs/building.md)。
 
@@ -46,26 +46,26 @@ openenlink serve
 curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
 ```
 
-`login` 接收网关地址，把授权保存在本机。`serve` 一直运行，在 `127.0.0.1:1088` 上接收 SOCKS5 和 HTTP 代理请求。第三条命令在另一个终端里执行，通过代理读取一个内网页面。
+`login` 登录并将授权保存在本机。`serve` 在前台运行，监听 `127.0.0.1:1088` 提供 SOCKS5 和 HTTP 代理。
 
-[使用说明](docs/usage.zh-CN.md)列出全部命令和选项，包括用 `openenlink nc` 走 SSH。
+全部命令和选项见[使用说明](docs/usage.zh-CN.md)，包括通过 `openenlink nc` 转发 SSH。
 
 ## 适配器
 
-有适配器的登录页，`login` 直接在终端里询问用户名和密码，并由它提交给登录页。
+有适配器的登录页，`login` 在终端里提示输入用户名和密码，然后直接提交给登录页。
 
 | 适配器   | 网关                       | 终端登录                           | 说明                                                       |
 | -------- | -------------------------- | ---------------------------------- | ---------------------------------------------------------- |
 | 苏州大学 | `https://wvpn.suda.edu.cn` | 用户名和密码、验证码、`--remember` | [docs/adapters/suda.zh-CN.md](docs/adapters/suda.zh-CN.md) |
 
-其他提供 OIDC 单点登录的 Enlink 网关通过浏览器登录：`login` 打印要打开的地址，登录完成后把浏览器最后停留的地址粘贴回来。要求 SPA 的网关暂不支持。
+其他支持 OIDC 单点登录的 Enlink 网关通过浏览器登录：`login` 输出登录链接，完成登录后把浏览器最终跳转的 URL 粘贴回终端。暂不支持要求 SPA 的网关。
 
 ## 文档
 
 - [使用说明](docs/usage.zh-CN.md)：命令、选项、凭据存储和退出状态。
-- [苏州大学](docs/adapters/suda.zh-CN.md)：目前唯一的适配器，包括网关和登录页。
+- [苏州大学](docs/adapters/suda.zh-CN.md)：网关和登录页。
 - [Contributing](CONTRIBUTING.md)：环境、检查命令、提交格式和 Pull Request。
-- [Writing an adapter](docs/adapters/README.md)：给另一个登录页写终端登录。
+- [Writing an adapter](docs/adapters/README.md)：为其他登录页编写适配器。
 - [Protocol](docs/protocol.md)：Enlink 控制器 API 和隧道帧格式。
 - [Building](docs/building.md)：从源码运行、打过补丁的 TCP/IP 协议栈和单文件可执行程序。
 

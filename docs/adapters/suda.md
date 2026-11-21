@@ -12,7 +12,7 @@ openenlink serve
 curl --proxy http://127.0.0.1:1088 "http://file.suda.edu.cn/defaultroot/SInformAction.do?action=init&type=1"
 ```
 
-`login` asks for the username and password of your unified identity account. The third command, in another terminal, fetches the internal notices page (校内通知), which answers only inside the university network.
+`login` prompts for your unified identity username and password. The `curl` command fetches the internal notices page (校内通知), which is only reachable from inside the university network.
 
 [Usage](../usage.md) covers the rest of the commands.
 
@@ -21,11 +21,11 @@ curl --proxy http://127.0.0.1:1088 "http://file.suda.edu.cn/defaultroot/SInformA
 | Step                  | In the terminal                                                            |
 | --------------------- | -------------------------------------------------------------------------- |
 | Username and password | Supported.                                                                 |
-| Captcha               | Supported. `login` shows the image and takes up to three answers.          |
+| Captcha               | Supported. `login` shows the image and allows up to three attempts.        |
 | `--remember`          | Supported. Keeps the `CASTGC` and `LOGIN_TOKEN` cookies with the password. |
 | Other sign-in methods | Run `openenlink login --browser` and finish in a browser.                  |
 
-The gateway issues no refresh token. Without `--remember`, `serve` exits with status 3 when the authorization expires, and you run `openenlink login` again. With `--remember`, `serve` signs in again by itself.
+The gateway does not issue a refresh token. Without `--remember`, `serve` exits with status 3 when the authorization expires, and you need to run `openenlink login` again. With `--remember`, `serve` re-authenticates automatically.
 
 ## SSH
 
@@ -42,7 +42,7 @@ This section is for maintaining the adapter in `src/adapters/suda.ts`.
 
 The gateway's OIDC entry redirects to `auth.suda.edu.cn`: `/sso/oauth2/authorize`, then `/sso/login`, then the CAS page `/cas/login`. The adapter recognises that page by its path and the `login-type` element.
 
-The page renders its form with a script. On submit, the script copies the hidden `.for-form` fields into `#login-form`, leaves out `pid`, and posts `_eventId`, `execution`, `lt`, `source`, `username` and `password` to `/cas/login`. The adapter posts the same fields. A page with other input fields stops the terminal sign-in before it asks for a password.
+The page renders its form with a script. On submit, the script copies the hidden `.for-form` fields into `#login-form`, leaves out `pid`, and posts `_eventId`, `execution`, `lt`, `source`, `username` and `password` to `/cas/login`. The adapter posts the same fields. A page with other input fields stops the terminal sign-in before it prompts for a password.
 
 A successful post sets `CASTGC` (path `/cas/`) and returns a ticket to `/sso/login`, which sets `LOGIN_TOKEN` (path `/sso`). The browser then goes back through `/sso/oauth2/authorize` to the gateway's `/oidc/callback?code=…`. Either cookie signs in again later without the password.
 

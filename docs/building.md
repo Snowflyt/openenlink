@@ -12,7 +12,7 @@ npm start -- login https://vpn.example.edu
 npm start -- serve
 ```
 
-`npm start --` takes the same arguments as the executable; [Usage](usage.md) lists them. For SSH, the `ProxyCommand` is `node /path/to/openenlink/src/cli.ts nc %h %p`.
+`npm start --` takes the same arguments as the executable. [Usage](usage.md) lists them. For SSH, the `ProxyCommand` is `node /path/to/openenlink/src/cli.ts nc %h %p`.
 
 ## The TCP/IP stack
 

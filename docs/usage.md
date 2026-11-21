@@ -25,9 +25,9 @@ The authorization stays on this machine until `openenlink logout`. How you sign 
 
 ### In the terminal
 
-On a sign-in page with an [adapter](../README.md#adapters), `login` asks for the username and password and posts them to that page over HTTPS. The username prompt offers the last one used, and Enter accepts it; `--user name` answers it in advance. Nothing appears while the password is typed. After a wrong password, `login` asks again, three attempts in all.
+On a sign-in page with an [adapter](../README.md#adapters), `login` prompts for the username and password and submits them to that page over HTTPS. The username prompt defaults to the last used account, and `--user name` skips the prompt. Password input is hidden, and `login` allows up to three attempts on a wrong password.
 
-When the page asks for a captcha, `login` draws the image in the terminal and asks for the answer. A terminal without image or true-color support gets the image as a temporary file, with its path printed.
+When the page requires a captcha, `login` renders it in the terminal and prompts for the code. In terminals without image or true-color support, it writes the image to a temporary file and prints the path.
 
 ### In a browser
 
@@ -35,10 +35,10 @@ When the page asks for a captcha, `login` draws the image in the terminal and as
 openenlink login --browser
 ```
 
-`login --browser` prints the gateway's sign-in address. Without the option, `login` does the same on a sign-in page without an adapter, and after an empty answer at the first username prompt or at the captcha prompt.
+`login --browser` prints the gateway's sign-in URL. Without the flag, `login` falls back to browser sign-in when no adapter matches, or on an empty response at the first username prompt or the captcha prompt.
 
-1. Open the printed address in a browser and sign in.
-2. Copy the address the browser ends on.
+1. Open the printed URL in a browser and sign in.
+2. Copy the final redirect URL.
 3. Paste it at the `Paste (hidden):` prompt.
 
 The prompt also takes the value of the gateway's `access_token` cookie, copied from the browser's developer tools.
@@ -54,10 +54,10 @@ openenlink login --remember
 - The password is posted only to the HTTPS origin where you typed it.
 - The password is tried at most once every five minutes.
 - A wrong password removes the remembered one.
-- A captcha stops the automatic sign-in; run `openenlink login --remember` again.
+- A captcha stops the automatic sign-in. Run `openenlink login --remember` again.
 - A later `login` without `--remember` removes the remembered password.
 
-`--remember` needs a terminal sign-in. A browser sign-in leaves no password to save, so `--browser` refuses `--remember`.
+`--remember` requires a terminal sign-in. Browser sign-in does not handle the password locally, so `--remember` cannot be combined with `--browser`.
 
 ### Other sign-in options
 
@@ -92,7 +92,7 @@ A second client that connects with the same account ends the first one's tunnel.
 
 After a dropped tunnel, `serve` reconnects by itself. The delay starts at one second and doubles up to 30 seconds.
 
-When the authorization expires, `serve` renews it with the gateway's refresh token or the remembered sign-in. When neither works, it exits with status 3; run `openenlink login` again.
+When the authorization expires, `serve` renews it using the gateway's refresh token or the remembered credentials. If neither works, it exits with status 3. Run `openenlink login` again.
 
 ### Shared machines
 
@@ -142,11 +142,11 @@ It keeps the authorization and any remembered password as plain JSON in `credent
 
 ## Exit statuses
 
-| Status | Meaning                                              |
-| ------ | ---------------------------------------------------- |
-| 0      | The command finished.                                |
-| 1      | The command failed for a reason not listed below.    |
-| 2      | The arguments were wrong; the usage text is printed. |
-| 3      | Someone needs to run `openenlink login`.             |
+| Status | Meaning                                           |
+| ------ | ------------------------------------------------- |
+| 0      | The command finished.                             |
+| 1      | The command failed for a reason not listed below. |
+| 2      | Invalid arguments. The usage text is printed.     |
+| 3      | Sign in again with `openenlink login`.            |
 
 A script that restarts `serve` can stop at status 3.

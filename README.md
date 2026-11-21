@@ -34,7 +34,7 @@ macOS blocks a file downloaded through a browser until its quarantine flag is cl
 xattr -d com.apple.quarantine openenlink
 ```
 
-Slim Linux container images leave out libraries the executable loads. Install `libatomic1` on Debian and Ubuntu. On Alpine, install `libstdc++`, and `libatomic` as well on x64.
+Slim Linux container images omit required shared libraries. Install `libatomic1` on Debian and Ubuntu. On Alpine, install `libstdc++`, plus `libatomic` on x64.
 
 Other systems, Intel Macs included, [run from source](docs/building.md).
 
@@ -46,26 +46,26 @@ openenlink serve
 curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
 ```
 
-`login` takes the address of your gateway and saves the authorization on this machine. `serve` keeps running and listens on `127.0.0.1:1088` for SOCKS5 and HTTP proxy requests. The third command, in another terminal, fetches an internal page through the proxy.
+`login` saves the authorization for the gateway locally. `serve` runs in the foreground and listens on `127.0.0.1:1088` for SOCKS5 and HTTP proxy requests.
 
-[Usage](docs/usage.md) covers every command and option, including SSH through `openenlink nc`.
+See [Usage](docs/usage.md) for all commands and options, including SSH via `openenlink nc`.
 
 ## Adapters
 
-An adapter lets `login` ask for the username and password in the terminal and post them to the sign-in page itself.
+An adapter lets `login` prompt for the username and password in the terminal and submit them to the sign-in page directly.
 
 | Adapter            | Gateway                    | Terminal sign-in                             | Guide                                          |
 | ------------------ | -------------------------- | -------------------------------------------- | ---------------------------------------------- |
 | Soochow University | `https://wvpn.suda.edu.cn` | Username and password, captcha, `--remember` | [docs/adapters/suda.md](docs/adapters/suda.md) |
 
-Other Enlink gateways that offer OIDC single sign-on work through a browser: `login` prints the address to open, and you paste the address the browser ends on. Gateways that require SPA are unsupported.
+Other Enlink gateways that offer OIDC single sign-on work through a browser: `login` prints the sign-in URL, and you paste back the final redirect URL. Gateways that require SPA are unsupported.
 
 ## Documentation
 
 - [Usage](docs/usage.md): commands, options, credential storage and exit statuses.
-- [Soochow University](docs/adapters/suda.md): the gateway and sign-in page of the one adapter so far.
+- [Soochow University](docs/adapters/suda.md): the gateway and its sign-in page.
 - [Contributing](CONTRIBUTING.md): setup, checks, commit format and pull requests.
-- [Writing an adapter](docs/adapters/README.md): terminal sign-in for another sign-in page.
+- [Writing an adapter](docs/adapters/README.md): an adapter for another sign-in page.
 - [Protocol](docs/protocol.md): the Enlink controller API and tunnel frames.
 - [Building](docs/building.md): running from source, the patched TCP/IP stack and the single executable.
 

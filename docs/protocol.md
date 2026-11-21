@@ -15,8 +15,8 @@ A refused callback lands on the same page with a `state` parameter: Base64 JSON 
 | Endpoint                                      | Result                                                                   |
 | --------------------------------------------- | ------------------------------------------------------------------------ |
 | `GET /enclient/api/users/info`                | `data.username` is the tunnel username.                                  |
-| `GET /enclient/api/users/terminal/rules`      | `data.token` is the tunnel token; `gateway_list` supplies endpoints.     |
-| `GET /enclient/api/users/client/refreshToken` | Refresh-token Bearer authentication; returns `token` and `refreshToken`. |
+| `GET /enclient/api/users/terminal/rules`      | `data.token` is the tunnel token, and `gateway_list` supplies endpoints. |
+| `GET /enclient/api/users/client/refreshToken` | Refresh-token Bearer authentication. Returns `token` and `refreshToken`. |
 
 Responses wrap results in `{code:"200",data:...}`. An expired authorization returns HTTP 401, or HTTP 200 with code `"401"` or `"3010"`.
 
@@ -34,15 +34,15 @@ The official signer removes a leading dot from that combined input. The client s
 
 ## TLS data channel
 
-Client frames have a 12-byte header: magic `01`, type, big-endian total length, four zero bytes and a little-endian flag. Authentication uses type 1, flag 1; heartbeats use type 1, flag 3. IPv4 packets use type 4 and flag `0x29000000`.
+Client frames have a 12-byte header: magic `01`, type, big-endian total length, four zero bytes and a little-endian flag. Authentication uses type 1 and flag 1, and heartbeats use type 1 and flag 3. IPv4 packets use type 4 and flag `0x29000000`.
 
-Authentication contains tagged username and tunnel-token strings followed by `FF`. The response uses a 12-byte header with success byte 8 equal to 1 and a zero status code at bytes 10–11. Address fields use a one-byte tag, two-byte big-endian length and value. Tag `0B` is the four-byte IPv4 address; `24` is textual DNS; `35` is a 16-byte IPv6 address.
+Authentication contains tagged username and tunnel-token strings followed by `FF`. The response uses a 12-byte header with success byte 8 equal to 1 and a zero status code at bytes 10–11. Address fields use a one-byte tag, two-byte big-endian length and value. Tag `0B` is the four-byte IPv4 address, `24` is textual DNS, and `35` is a 16-byte IPv6 address.
 
-Subsequent gateway frames use an 8-byte header. Type 2 is control traffic; type 4 carries IPv4. The client emits a heartbeat every 500 milliseconds and ends a tunnel whose gateway sends nothing for 30 seconds.
+Subsequent gateway frames use an 8-byte header. Type 2 is control traffic, and type 4 carries IPv4. The client emits a heartbeat every 500 milliseconds and closes a tunnel whose gateway sends nothing for 30 seconds.
 
 ## DNS
 
-The proxy's resolver sends UDP queries through the tunnel to the resolver from the handshake and decodes replies with `dns-packet`, which handles the compressed names gateways send. Answers can map internal host names to virtual `192.19.*` addresses that exist only inside the tunnel, so a public resolver cannot replace it. Truncated replies are reported; DNS over TCP and IPv6 transport are unimplemented.
+The proxy's resolver sends UDP queries through the tunnel to the resolver from the handshake and decodes replies with `dns-packet`, which handles the compressed names gateways send. Answers can map internal host names to virtual `192.19.*` addresses that exist only inside the tunnel, so a public resolver cannot replace it. Truncated replies are reported. DNS over TCP and IPv6 transport are unimplemented.
 
 lwIP treats `127/8` as local. For a resolver at a loopback address, the client uses an internal RFC 2544 alias and translates IPv4 addresses and checksums at the TLS boundary.
 
