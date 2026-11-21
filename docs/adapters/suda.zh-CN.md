@@ -48,11 +48,13 @@ Host *.suda.edu.cn
 
 服务器保留 `X_CAPTCHA` cookie 期间，表单还要带上 `captcha` 和 `token`。`GET /sso/apis/v2/open/captcha?imageWidth=100` 返回验证码：`img` 是 Base64 编码的 JPEG，`token` 是对应的令牌。
 
-提交被拒绝时，服务器返回同一页面，错误码在 `#errorcode` 里，错误信息在 `#errormes` 里。
+提交被拒绝时，服务器以状态 200 返回同一页面，错误码在 `#errorcode` 里，错误信息在 `#errormes` 里。页面显示错误信息，错误信息为空时显示错误码对应的文字。密码错误时错误码为空。
 
-| 错误码包含                                                                   | 含义             |
-| ---------------------------------------------------------------------------- | ---------------- |
-| `INVALID_PASSWORD`、`ACCOUNT_NOT_FOUND`、`USER_NOT_FOUND`、`INVALID_ACCOUNT` | 用户名或密码错误 |
-| `INVALID_CAPTCHA`、`EXPIRED_CAPTCHA`                                         | 验证码错误或过期 |
+| 页面内容                                                   | 含义             |
+| ---------------------------------------------------------- | ---------------- |
+| 错误信息 `您输入的用户名或密码错误`，或 `INVALID_PASSWORD` | 用户名或密码错误 |
+| `INVALID_CAPTCHA` 或 `EXPIRED_CAPTCHA`                     | 验证码错误或过期 |
+
+其他拒绝原因（如账号锁定）会结束登录，并显示页面给出的错误信息。
 
 学校的[客户端使用指南](https://its.suda.edu.cn/ae/d0/c3658a700112/page.htm)介绍了同一网关的官方客户端。

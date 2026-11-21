@@ -10,7 +10,9 @@ import { printable, tags } from "../web.ts";
 
 const FIELDS = ["_eventId", "execution", "lt", "pid", "source"];
 
-const PASSWORD = ["INVALID_PASSWORD", "ACCOUNT_NOT_FOUND", "USER_NOT_FOUND", "INVALID_ACCOUNT"];
+// The server's own words for a wrong username or password, sent without a code. Other refusals,
+// such as a locked account, stop the sign-in with their message.
+const WRONG_LOGIN = "您输入的用户名或密码错误";
 const CAPTCHA = ["INVALID_CAPTCHA", "EXPIRED_CAPTCHA"];
 
 export const suda: Adapter = {
@@ -61,13 +63,11 @@ export const suda: Adapter = {
   failure(page) {
     const spans = tags(page.html, "span");
     const code = spans.find((span) => span.id === "errorcode")?.value ?? "";
-    const message = printable(spans.find((span) => span.id === "errormes")?.value ?? "");
+    const message = printable(spans.find((span) => span.id === "errormes")?.value ?? "").trim();
     const known = /^[A-Z_]{1,64}$/.test(code) ? code : "";
-    // A wrong password comes back without a code, only with the message.
-    if (PASSWORD.some((name) => known.includes(name)) || (!code && message.includes("密码错误")))
+    if (code === "INVALID_PASSWORD" || (!code && message === WRONG_LOGIN))
       return { reason: "password", message: "Wrong username or password" };
-    if (CAPTCHA.some((name) => known.includes(name)))
-      return { reason: "captcha", message: "Wrong or expired captcha" };
+    if (CAPTCHA.includes(code)) return { reason: "captcha", message: "Wrong or expired captcha" };
     let description = "Sign-in failed";
     if (known) description += ` (${known})`;
     if (message) description += `: ${message}`;

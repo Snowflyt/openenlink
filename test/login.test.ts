@@ -24,6 +24,7 @@ const cas = {
   captcha: false,
   // A wrong password turns the captcha on, as the real page does after failures.
   captchaAfterMiss: false,
+  missMessage: "您输入的用户名或密码错误",
   rejectCodes: false,
   sessions: new Set<string>(),
   tickets: new Set<string>(),
@@ -139,10 +140,10 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     const body = new URLSearchParams(text);
     cas.posts.push({ body, referer: request.headers.referer });
     if (cas.captcha && (body.get("captcha") !== "right" || body.get("token") !== "captcha"))
-      return html(401, page("INVALID_CAPTCHA", "验证码错误"));
+      return html(200, page("INVALID_CAPTCHA", "验证码错误"));
     if (body.get("password") !== cas.password) {
       if (cas.captchaAfterMiss) cas.captcha = true;
-      return html(401, page("", "您输入的用户名或密码错误"));
+      return html(200, page("", cas.missMessage));
     }
     response.writeHead(302, {
       Location: `/sso/login?ticket=${issue(cas.tickets)}`,
@@ -164,6 +165,7 @@ function reset() {
     form: "normal",
     captcha: false,
     captchaAfterMiss: false,
+    missMessage: "您输入的用户名或密码错误",
     rejectCodes: false,
     posts: [],
     unexpected: 0,
@@ -229,6 +231,17 @@ await test("Report a wrong password and a gateway refusal", async () => {
   cas.password = "changed-password";
   await assert.rejects(login(entry, { account: typed([]) }), WrongPassword);
   assert.equal(cas.posts.length, 1);
+  // Another refusal ends the sign-in without asking for the password again.
+  reset();
+  cas.password = "changed-password";
+  cas.missMessage = "账号已锁定";
+  const origins: string[] = [];
+  await assert.rejects(login(entry, { account: typed(origins) }), (error: unknown) => {
+    assert.ok(!(error instanceof WrongPassword));
+    assert.match(String(error), /Sign-in failed: 账号已锁定/);
+    return true;
+  });
+  assert.equal(origins.length, 1);
   reset();
   cas.rejectCodes = true;
   await assert.rejects(

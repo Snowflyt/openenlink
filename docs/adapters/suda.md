@@ -48,11 +48,13 @@ A successful post sets `CASTGC` (path `/cas/`) and returns a ticket to `/sso/log
 
 While the server keeps an `X_CAPTCHA` cookie, the form also carries `captcha` and `token`. `GET /sso/apis/v2/open/captcha?imageWidth=100` returns the image as a Base64 JPEG in `img`, with its `token`.
 
-A rejected post returns the page with a code in `#errorcode` and a message in `#errormes`.
+A rejected post returns the page again with status 200, a code in `#errorcode` and a message in `#errormes`. The page shows the message, or the code's text when the message is empty. A wrong password comes with an empty code.
 
-| Code contains                                                                | Meaning                    |
-| ---------------------------------------------------------------------------- | -------------------------- |
-| `INVALID_PASSWORD`, `ACCOUNT_NOT_FOUND`, `USER_NOT_FOUND`, `INVALID_ACCOUNT` | Wrong username or password |
-| `INVALID_CAPTCHA`, `EXPIRED_CAPTCHA`                                         | Wrong or expired captcha   |
+| The page carries                                              | Meaning                    |
+| ------------------------------------------------------------- | -------------------------- |
+| The message `您输入的用户名或密码错误`, or `INVALID_PASSWORD` | Wrong username or password |
+| `INVALID_CAPTCHA` or `EXPIRED_CAPTCHA`                        | Wrong or expired captcha   |
+
+Any other refusal, such as a locked account, ends the sign-in with the page's message.
 
 The university's [client guide](https://its.suda.edu.cn/ae/d0/c3658a700112/page.htm) describes the official client for the same gateway.
