@@ -187,14 +187,22 @@ function windows(): Keyring {
     return new Error(`Credential Manager: ${text}`);
   }
 
+  // Runs a Win32 call and returns its error code, or undefined on success. node:ffi reads the
+  // last error in a separate call, and the runtime can reset it to 0 in between, so a failure
+  // that reports 0 runs once more.
+  function call(run: () => number): number | undefined {
+    if (run()) return;
+    const code = kernel.GetLastError();
+    if (code) return code;
+    return run() ? undefined : kernel.GetLastError();
+  }
+
   return {
     read(service, account) {
       const out = Buffer.alloc(8);
-      if (!advapi.CredReadW(target(service, account), GENERIC, 0, out)) {
-        const code = kernel.GetLastError();
-        if (code === ERROR_NOT_FOUND) return;
-        throw failure(code);
-      }
+      const code = call(() => advapi.CredReadW(target(service, account), GENERIC, 0, out));
+      if (code === ERROR_NOT_FOUND) return;
+      if (code !== undefined) throw failure(code);
       const credential = out.readBigUInt64LE();
       try {
         // CREDENTIALW: CredentialBlobSize at 32, CredentialBlob at 40.
@@ -224,13 +232,13 @@ function windows(): Keyring {
       credential.writeBigUInt64LE(base + BigInt(80 + name.length + user.length), 40);
       credential.writeUInt32LE(PERSIST_LOCAL_MACHINE, 48);
       credential.writeBigUInt64LE(base + BigInt(80 + name.length), 72);
-      if (!advapi.CredWriteW(credential, 0)) throw failure(kernel.GetLastError());
+      const code = call(() => advapi.CredWriteW(credential, 0));
+      if (code !== undefined) throw failure(code);
     },
 
     delete(service, account) {
-      if (advapi.CredDeleteW(target(service, account), GENERIC, 0)) return;
-      const code = kernel.GetLastError();
-      if (code !== ERROR_NOT_FOUND) throw failure(code);
+      const code = call(() => advapi.CredDeleteW(target(service, account), GENERIC, 0));
+      if (code !== undefined && code !== ERROR_NOT_FOUND) throw failure(code);
     },
   };
 }
