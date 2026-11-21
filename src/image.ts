@@ -1,6 +1,7 @@
 // Shows a JPEG in the terminal: iTerm2 inline images, the kitty graphics protocol, sixel or
 // colored half blocks, in that order, and otherwise saves it to a private temporary file.
 
+import { execFileSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,10 +13,15 @@ const COLUMNS = 24;
 const CHUNK = 4096;
 const QUERY_TIMEOUT = 1000;
 
-// Terminals that announce iTerm2's inline images in the environment. Inside tmux the variables
+// tmux or screen sits between us and the terminal. Over ssh only TERM tells.
+export function multiplexed(env: NodeJS.ProcessEnv): boolean {
+  return Boolean(env.TMUX) || /^(tmux|screen)/.test(env.TERM ?? "");
+}
+
+// Terminals that announce iTerm2's inline images in the environment. Behind tmux the variables
 // describe the outer terminal and the escape sequence would not reach it.
 export function envProtocol(env: NodeJS.ProcessEnv): "iterm" | undefined {
-  if (env.TMUX) return;
+  if (multiplexed(env)) return;
   const program = env.TERM_PROGRAM ?? "";
   if (
     ["iTerm", "WezTerm", "mintty", "rio", "WarpTerminal"].some((name) => program.includes(name)) ||
@@ -157,6 +163,22 @@ async function queryTerminal(): Promise<string> {
   }
 }
 
+// tmux answers the query for itself and passes sixel on only when the outer terminal draws it.
+function outerSixel(): boolean {
+  if (!process.env.TMUX) return false;
+  try {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- the tmux running this pane is the one on PATH
+    const features = execFileSync("tmux", ["display", "-p", "#{client_termfeatures}"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: QUERY_TIMEOUT,
+    });
+    return features.trim().split(",").includes("sixel");
+  } catch {
+    return false;
+  }
+}
+
 function truecolor(env: NodeJS.ProcessEnv): boolean {
   return env.COLORTERM === "truecolor" || env.COLORTERM === "24bit" || Boolean(env.WT_SESSION);
 }
@@ -176,7 +198,8 @@ export async function showImage(jpeg: Buffer): Promise<() => Promise<void>> {
       bitmap = undefined;
     }
     if (bitmap) {
-      const protocol = replyProtocol(await queryTerminal());
+      let protocol = replyProtocol(await queryTerminal());
+      if (protocol === "sixel" && multiplexed(process.env) && !outerSixel()) protocol = undefined;
       if (protocol === "kitty") process.stderr.write(kitty(bitmap));
       else if (protocol === "sixel") process.stderr.write(sixel(bitmap) + "\n");
       else if (truecolor(process.env))

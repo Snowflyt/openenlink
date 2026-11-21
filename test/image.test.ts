@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { envProtocol, halfBlocks, replyProtocol, sixel } from "../src/image.ts";
+import { envProtocol, halfBlocks, multiplexed, replyProtocol, sixel } from "../src/image.ts";
 import type { Bitmap } from "../src/jpeg.ts";
 
 await test("Find the image protocol a terminal speaks", () => {
@@ -13,7 +13,10 @@ await test("Find the image protocol a terminal speaks", () => {
     envProtocol({ TERM_PROGRAM: "iTerm.app", TMUX: "tmux-501/default,4242,0" }),
     undefined,
   );
+  assert.equal(envProtocol({ LC_TERMINAL: "iTerm2", TERM: "tmux-256color" }), undefined);
   assert.equal(envProtocol({ TERM_PROGRAM: "Apple_Terminal" }), undefined);
+  assert.equal(multiplexed({ TERM: "screen-256color" }), true);
+  assert.equal(multiplexed({ TERM: "xterm-256color" }), false);
 
   assert.equal(replyProtocol("\x1b_Gi=31;OK\x1b\\\x1b[?62;22c"), "kitty");
   assert.equal(replyProtocol("\x1b_Gi=31;ENOTSUPPORTED\x1b\\\x1b[?62;4;22c"), "sixel");
