@@ -22,6 +22,8 @@ await test("Find the image protocol a terminal speaks", () => {
   assert.equal(replyProtocol("\x1b_Gi=31;ENOTSUPPORTED\x1b\\\x1b[?62;4;22c"), "sixel");
   assert.equal(replyProtocol("\x1b[?62;22;4c"), "sixel");
   assert.equal(replyProtocol("\x1b[?62;14;22c"), undefined);
+  assert.equal(replyProtocol("\x1b[?61;4c"), undefined);
+  assert.equal(replyProtocol("\x1b_Gi=31;OK\x1b\\\x1b[?61;4c"), "kitty");
   assert.equal(replyProtocol(""), undefined);
 });
 

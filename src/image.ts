@@ -32,20 +32,16 @@ export function envProtocol(env: NodeJS.ProcessEnv): "iterm" | undefined {
 }
 
 // Reads the answers to a kitty graphics query followed by a primary device attributes query.
-// Kitty answers the first with OK; a terminal that lists attribute 4 draws sixel.
+// Kitty answers the first with OK; a terminal that lists attribute 4 draws sixel. VS Code on
+// Windows always answers 61;4, whether it draws images or not, and with images on it answers
+// the kitty query.
 export function replyProtocol(reply: string): "kitty" | "sixel" | undefined {
   if (reply.includes("\x1b_Gi=31;OK")) return "kitty";
   const start = reply.indexOf("\x1b[?");
   const end = reply.indexOf("c", start);
-  if (
-    start >= 0 &&
-    end > start &&
-    reply
-      .slice(start + 3, end)
-      .split(";")
-      .includes("4")
-  )
-    return "sixel";
+  if (start < 0 || end <= start) return;
+  const attributes = reply.slice(start + 3, end);
+  if (attributes !== "61;4" && attributes.split(";").includes("4")) return "sixel";
 }
 
 export function sixel(bitmap: Bitmap): string {
