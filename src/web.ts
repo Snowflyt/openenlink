@@ -53,7 +53,7 @@ export class Web {
 
   async json(url: URL): Promise<unknown> {
     const response = await this.send(url);
-    if (!response.ok) throw new Error(`${url.host} returned HTTP ${response.status}`);
+    if (!response.ok) throw new Error(`${where(url)} returned HTTP ${response.status}`);
     return response.json();
   }
 
@@ -64,7 +64,9 @@ export class Web {
     done: (url: URL) => T | undefined,
     form?: { body: URLSearchParams; referer: URL },
   ): Promise<T | Page> {
+    const hops: string[] = [];
     for (let hop = 0; hop < HOPS; hop++) {
+      hops.push(where(url));
       const result = done(url);
       if (result !== undefined) return result;
       const response = await this.send(url, form);
@@ -77,7 +79,7 @@ export class Web {
       url = new URL(location, url);
       form = undefined;
     }
-    throw new Error("Sign-in redirected too many times");
+    throw new Error(`Sign-in redirected too many times: ${hops.join(" > ")}`);
   }
 
   private async send(url: URL, form?: { body: URLSearchParams; referer: URL }): Promise<Response> {
@@ -109,6 +111,14 @@ export class Web {
     }
     return response;
   }
+}
+
+// The host and path of a sign-in address, for messages, with the HTTP status unless it is 200.
+// The query, the fragment and any ;parameter of the path can carry tickets and session ids, so
+// they are left out.
+export function where(url: URL, status = 200): string {
+  const place = printable(url.host + url.pathname.replace(/;.*/s, ""));
+  return status === 200 ? place : `${place} (HTTP ${String(status)})`;
 }
 
 function cookieKey(cookie: Cookie): string {

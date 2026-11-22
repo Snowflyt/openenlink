@@ -3,7 +3,7 @@ import type { Account, Adapter, LoginForm } from "./adapter.ts";
 import { suda } from "./adapters/suda.ts";
 import { AuthenticationError } from "./controller.ts";
 import type { Credentials } from "./credentials.ts";
-import { Page, Web, printable } from "./web.ts";
+import { Page, Web, printable, where } from "./web.ts";
 import type { Cookie } from "./web.ts";
 
 const ADAPTERS: Adapter[] = [suda];
@@ -82,7 +82,7 @@ export async function login(entry: URL, options: LoginOptions): Promise<SignIn> 
       break;
     }
   }
-  if (!match) throw new UnsupportedLogin(`No terminal sign-in for ${page.url.host}`);
+  if (!match) throw new UnsupportedLogin(`No terminal sign-in for ${where(page.url, page.status)}`);
   const { adapter } = match;
   let { form } = match;
   if (form.captcha && !options.captcha)
@@ -113,6 +113,10 @@ export async function login(entry: URL, options: LoginOptions): Promise<SignIn> 
       };
     }
     const failure = adapter.failure(result);
+    if (!failure)
+      throw new UnsupportedLogin(
+        `The sign-in ended on an unknown page at ${where(result.url, result.status)}`,
+      );
     const next = failure.reason === "other" ? undefined : adapter.form(result, web);
     if (failure.reason === "password") {
       const retry = next && (await options.account(origin, failure.message));

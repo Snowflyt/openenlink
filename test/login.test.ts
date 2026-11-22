@@ -26,6 +26,8 @@ const cas = {
   captchaAfterMiss: false,
   missMessage: "您输入的用户名或密码错误",
   rejectCodes: false,
+  // Where a right password leads instead of the ticket, such as a forced password change.
+  landing: "",
   sessions: new Set<string>(),
   tickets: new Set<string>(),
   codes: new Set<string>(),
@@ -145,11 +147,14 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
       if (cas.captchaAfterMiss) cas.captcha = true;
       return html(200, page("", cas.missMessage));
     }
+    if (cas.landing) return redirect(cas.landing);
     response.writeHead(302, {
       Location: `/sso/login?ticket=${issue(cas.tickets)}`,
       "Set-Cookie": `CASTGC=${issue(cas.sessions)}; Path=/cas/; Secure; HttpOnly`,
     });
     return response.end();
+  } else if (url.pathname.startsWith("/cas/pwdchange")) {
+    return html(200, "<p>请修改密码</p>");
   } else if (url.pathname === "/sso/apis/v2/open/captcha") {
     response.writeHead(200, { "Content-Type": "application/json" });
     return response.end(JSON.stringify({ img: CAPTCHA.toString("base64"), token: "captcha" }));
@@ -167,6 +172,7 @@ function reset() {
     captchaAfterMiss: false,
     missMessage: "您输入的用户名或密码错误",
     rejectCodes: false,
+    landing: "",
     posts: [],
     unexpected: 0,
   });
@@ -248,6 +254,19 @@ await test("Report a wrong password and a gateway refusal", async () => {
     login(entry, { account: typed([]) }),
     /The gateway refused the sign-in: 未查找到用户信息/,
   );
+});
+
+await test("Name the page a sign-in ends on when the adapter does not know it", async () => {
+  reset();
+  cas.landing = "/cas/pwdchange;jsessionid=session-secret?ticket=ticket-secret#step";
+  await assert.rejects(login(entry, { account: typed([]) }), (error: unknown) => {
+    assert.ok(error instanceof UnsupportedLogin);
+    assert.equal(
+      error.message,
+      `The sign-in ended on an unknown page at ${new URL(idp).host}/cas/pwdchange`,
+    );
+    return true;
+  });
 });
 
 await test("Ask for the password again on the same page, with the captcha it then shows", async () => {

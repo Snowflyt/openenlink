@@ -68,6 +68,7 @@ export const suda: Adapter = {
     if (code === "INVALID_PASSWORD" || (!code && message === WRONG_LOGIN))
       return { reason: "password", message: "Wrong username or password" };
     if (CAPTCHA.includes(code)) return { reason: "captcha", message: "Wrong or expired captcha" };
+    if (!known && !message) return;
     let description = "Sign-in failed";
     if (known) description += ` (${known})`;
     if (message) description += `: ${message}`;

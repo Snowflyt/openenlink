@@ -22,8 +22,9 @@ export type Adapter = {
   // other page. A page that looks like the provider's but carries unexpected fields throws
   // UnsupportedLogin before any password is asked for.
   form: (page: Page, web: Web) => LoginForm | undefined;
-  // Explains the page shown after a rejected sign-in.
-  failure: (page: Page) => Failure;
+  // Explains the page shown after a rejected sign-in, or returns nothing for a page it does not
+  // know, such as a forced password change.
+  failure: (page: Page) => Failure | undefined;
 };
 
 // The terminal cannot finish this sign-in; a browser can.

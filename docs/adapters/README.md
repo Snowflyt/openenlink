@@ -22,7 +22,7 @@ Create `src/adapters/<name>.ts` and export an `Adapter` from `src/adapter.ts`:
 export type Adapter = {
   session: string[];
   form: (page: Page, web: Web) => LoginForm | undefined;
-  failure: (page: Page) => Failure;
+  failure: (page: Page) => Failure | undefined;
 };
 ```
 
@@ -47,6 +47,8 @@ When the page is yours and its fields differ from what the adapter knows, throw 
 | `password` | `login` prompts for the username and password again.  |
 | `captcha`  | `login` reads the form again and shows a new captcha. |
 | `other`    | `login` stops and prints `message`.                   |
+
+It returns nothing for a page it does not know, such as a forced password change. `login` then prints the page's host and path and falls back to the browser.
 
 Pass server text through `printable` before putting it in `message`.
 
