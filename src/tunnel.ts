@@ -1,4 +1,5 @@
 import { once } from "node:events";
+import { isIP } from "node:net";
 import type { ConnectionOptions, TLSSocket } from "node:tls";
 import { connect } from "node:tls";
 
@@ -38,13 +39,15 @@ export class Tunnel {
     token: string,
     tls: Pick<ConnectionOptions, "ca"> = {},
   ): Promise<Tunnel> {
+    // Node.js sends no SNI unless asked, and SNI takes only a host name.
+    const servername = gateway.serverName ?? gateway.host;
     const socket = connect({
       ...tls,
       host: gateway.host,
       minVersion: "TLSv1.2",
       port: gateway.port,
       rejectUnauthorized: true,
-      ...(gateway.serverName && { servername: gateway.serverName }),
+      ...(!isIP(servername) && { servername }),
     });
     socket.on("error", () => {});
     socket.setTimeout(30_000, () => socket.destroy(new Error("Gateway timed out")));
