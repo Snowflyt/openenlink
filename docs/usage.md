@@ -102,15 +102,26 @@ Signing in elsewhere can take the authorization over the account's limit of simu
 
 ### Log
 
-Each line from `serve` starts with the local time and a level. `debug` and `info` go to standard output, `warn` and `error` to standard error:
+Each line from `serve` starts with the local time and a level. `debug` and `info` go to standard output, `warn` and `error` to standard error. A connection through the tunnel gets one line when it opens, and one when it closes or fails:
 
 ```text
 [2026-11-21 09:43:02.123] [info] Proxy listening on 127.0.0.1:1088
+[2026-11-21 09:43:10.481] [info] [TCP] 127.0.0.1:52344 --> library.example.edu:443
+[2026-11-21 09:54:41.902] [info] [TCP] 127.0.0.1:52344 --> library.example.edu:443 closed after 11m31s, sent 48.2 kB, received 1.3 MB
+[2026-11-21 09:55:03.017] [error] [TCP] 127.0.0.1:52360 --> 10.20.0.5:8079 failed: tcp connection reset
 ```
 
-Under systemd the journal records the time of each line, and `serve` leaves its own out.
+`(client reset)` after the duration means the client reset the connection, and `(tunnel closed)` means the tunnel dropped while the connection was open. A wrong proxy password is a warning.
 
-`--log-level` sets the lowest level that `serve` prints: `error`, `warn`, `info`, which is the default, or `debug`.
+`--log-level` sets the lowest level that `serve` prints: `error`, `warn`, `info`, which is the default, or `debug`. `debug` adds the addresses the gateway assigned, each internal DNS answer, and session renewals.
+
+No line holds the data, a password, a token or the path of an HTTP request. The lines do name the internal hosts and the local clients that reach them. `--log-level warn` keeps only warnings and errors.
+
+Under systemd the journal records the time of each line, and `serve` leaves its own out. To keep the log in a file elsewhere:
+
+```sh
+openenlink serve >> serve.log 2>&1
+```
 
 ### Shared machines
 

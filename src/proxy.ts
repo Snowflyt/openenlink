@@ -6,8 +6,8 @@ import type { Server, Socket } from "node:net";
 import type { NetworkStack } from "#tcpip";
 
 import type { Resolver } from "./dns.ts";
+import { Flow } from "./flow.ts";
 import { serveHttp } from "./http.ts";
-import * as log from "./log.ts";
 import { serveSocks } from "./socks.ts";
 import { ByteReader } from "./stream.ts";
 
@@ -46,12 +46,14 @@ export class ProxyServer {
       socket.on("error", () => {});
       socket.once("close", () => clients.delete(socket));
       socket.setTimeout(15_000, () => socket.destroy());
-      void serve(socket, stack, resolver, authorize).catch((error: unknown) => {
-        log.error(
-          `Proxy connection failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-        );
-        socket.destroy();
-      });
+      const flow = new Flow("TCP", socket);
+      void serve(socket, flow, stack, resolver, authorize).then(
+        () => flow.end(),
+        (error: unknown) => {
+          flow.end(error);
+          socket.destroy();
+        },
+      );
     });
 
     server.listen(port, host);
@@ -71,6 +73,7 @@ export class ProxyServer {
 
 async function serve(
   socket: Socket,
+  flow: Flow,
   stack: NetworkStack,
   resolver: Resolver,
   authorize?: Authorize,
@@ -78,7 +81,10 @@ async function serve(
   const controller = new AbortController();
   socket.once("close", () => controller.abort());
   const reader = new ByteReader(socket);
+  const first = await reader.peek();
+  // A client that closes before its first byte, such as a port check, made no connection.
+  if (first === undefined) return;
   // A SOCKS5 greeting starts with version byte 5, an HTTP request with a method name.
-  const session = (await reader.peek()) === 5 ? serveSocks : serveHttp;
-  await session(socket, reader, stack, resolver, controller.signal, authorize);
+  const session = first === 5 ? serveSocks : serveHttp;
+  await session(socket, reader, flow, stack, resolver, controller.signal, authorize);
 }

@@ -6,6 +6,7 @@ import type { Socket } from "node:net";
 import type { NetworkStack, UdpSocket } from "#tcpip";
 
 import type { Resolver } from "./dns.ts";
+import type { Flow } from "./flow.ts";
 import { relay } from "./relay.ts";
 import type { ByteReader } from "./stream.ts";
 import { write } from "./stream.ts";
@@ -50,6 +51,7 @@ function reply(status: number, host = "127.0.0.1", port = 0): Buffer {
 export async function serveSocks(
   socket: Socket,
   reader: ByteReader,
+  flow: Flow,
   stack: NetworkStack,
   resolver: Resolver,
   signal: AbortSignal,
@@ -60,6 +62,7 @@ export async function serveSocks(
   // Method 2 is RFC 1929 username/password, method 0 is no authentication.
   const method = authorize ? 2 : 0;
   if (!methods.includes(method)) {
+    flow.warn(authorize ? "sent no proxy password" : "offered only password authentication");
     await write(socket, Buffer.from([5, 255]));
     socket.end();
     return;
@@ -67,6 +70,7 @@ export async function serveSocks(
 
   await write(socket, Buffer.from([5, method]));
   if (authorize && !(await authenticate(socket, reader, authorize))) {
+    flow.warn("proxy password rejected");
     socket.end();
     return;
   }
@@ -81,9 +85,10 @@ export async function serveSocks(
 
   const destination = await target(reader, request[3]);
   if (request[1] === 3) {
-    await associate(socket, reader, stack, resolver, signal, destination);
+    await associate(socket, reader, flow, stack, resolver, signal, destination);
     return;
   }
+  flow.to(destination.host, destination.port);
   if (request[1] !== 1) {
     await write(socket, reply(7));
     socket.end();
@@ -99,7 +104,7 @@ export async function serveSocks(
     await write(socket, reply(1));
     throw error;
   }
-  await relay(socket, reader, connection, { reply: reply(0) });
+  await relay(socket, reader, connection, flow, { reply: reply(0) });
 }
 
 async function authenticate(
@@ -118,6 +123,7 @@ async function authenticate(
 async function associate(
   control: Socket,
   reader: ByteReader,
+  flow: Flow,
   stack: NetworkStack,
   resolver: Resolver,
   signal: AbortSignal,
@@ -133,6 +139,7 @@ async function associate(
   const writer = remote.writable.getWriter();
   let clientPort = destination.port;
   let sendQueue = Promise.resolve();
+  const failed = Promise.withResolvers<never>();
 
   local.on("error", () => control.destroy());
   local.on("message", (packet, source) => {
@@ -152,23 +159,29 @@ async function associate(
     if (clientPort === 0) clientPort = source.port;
     const port = packet.readUInt16BE(offset);
     const data = packet.subarray(offset + 2);
+    flow.sent += data.length;
     sendQueue = sendQueue.then(async () =>
       writer.write({ data, host: await resolver.lookup(host, signal), port }),
     );
-    void sendQueue.catch(() => control.destroy());
+    void sendQueue.catch(failed.reject);
   });
 
   local.bind(0, relayHost);
   await once(local, "listening");
   control.setTimeout(0);
   await write(control, reply(0, relayHost, local.address().port));
+  flow.protocol = "UDP";
+  flow.open("associated");
 
   try {
     await Promise.race([
-      relayDatagrams(remote, (packet) => {
-        if (clientPort) local.send(packet, clientPort, clientHost);
+      relayDatagrams(remote, (packet, size) => {
+        if (!clientPort) return;
+        flow.received += size;
+        local.send(packet, clientPort, clientHost);
       }),
       reader.chunk(),
+      failed.promise,
     ]);
   } finally {
     control.destroy();
@@ -178,8 +191,12 @@ async function associate(
   }
 }
 
-async function relayDatagrams(remote: UdpSocket, send: (packet: Buffer) => void): Promise<void> {
+async function relayDatagrams(
+  remote: UdpSocket,
+  send: (packet: Buffer, size: number) => void,
+): Promise<void> {
   for await (const packet of remote) {
-    send(Buffer.concat([Buffer.from([0, 0, 0]), address(packet.host, packet.port), packet.data]));
+    const header = Buffer.concat([Buffer.from([0, 0, 0]), address(packet.host, packet.port)]);
+    send(Buffer.concat([header, packet.data]), packet.data.length);
   }
 }

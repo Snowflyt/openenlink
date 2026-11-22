@@ -1,6 +1,7 @@
 import { parentPort, workerData } from "node:worker_threads";
 
 import { Resolver } from "./dns.ts";
+import { flowsEnded, markTunnelClosed } from "./flow.ts";
 import { forward } from "./forward.ts";
 import type { Forward } from "./forward.ts";
 import * as log from "./log.ts";
@@ -36,6 +37,8 @@ parentPort!.postMessage({ port: proxy.port });
 try {
   await tunnel.done;
 } finally {
+  markTunnelClosed();
   await Promise.all([proxy.close(), ...forwards.map((forwarding) => forwarding.close())]);
+  await flowsEnded();
   tunnel.close();
 }

@@ -19,10 +19,11 @@ export class ByteReader {
     return next.done ? undefined : next.value;
   }
 
-  async peek(): Promise<number> {
+  // Returns undefined when the stream ends before its first byte.
+  async peek(): Promise<number | undefined> {
     if (!this.pending.length) {
       const chunk = await this.chunk();
-      if (!chunk) throw new Error("Connection ended before the complete packet arrived");
+      if (!chunk) return undefined;
       this.pending = chunk;
     }
     return this.pending[0];

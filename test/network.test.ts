@@ -5,8 +5,10 @@ import { once } from "node:events";
 import { connect } from "node:net";
 import type { Socket } from "node:net";
 import { test } from "node:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { createServer } from "node:tls";
 import { fileURLToPath } from "node:url";
+import { stripVTControlCharacters } from "node:util";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 
 import { DnsServer } from "@tcpip/dns";
@@ -16,6 +18,7 @@ import { generate } from "selfsigned";
 import { createStack } from "#tcpip";
 
 import { Resolver } from "../src/dns.ts";
+import { markTunnelClosed } from "../src/flow.ts";
 import { forward } from "../src/forward.ts";
 import { ProxyServer } from "../src/proxy.ts";
 import type { ProxyAuth } from "../src/proxy.ts";
@@ -51,6 +54,20 @@ if (isMainThread) {
 }
 
 async function exercise(): Promise<void> {
+  // Log lines without their time, in the order the worker wrote them.
+  const lines: string[] = [];
+  const capture = (line: string) => {
+    lines.push(stripVTControlCharacters(line).replace(/^\[[^\]]*\] (?=\[)/, ""));
+  };
+  console.log = capture;
+  console.error = capture;
+  // Each pattern is matched against whole lines, after "[level] [TCP] 127.0.0.1:port".
+  const logged = async (level: string, protocol: string, rest: string) => {
+    const pattern = new RegExp(String.raw`^\[${level}\] \[${protocol}\] 127\.0\.0\.1:\d+ ${rest}$`);
+    while (!lines.some((line) => pattern.test(line))) await sleep(10);
+    return pattern;
+  };
+
   const {
     auth,
     bind = "127.0.0.1",
@@ -221,7 +238,16 @@ async function exercise(): Promise<void> {
     await write(stranger, Buffer.from("CONNECT intranet.test:8080 HTTP/1.1\r\n\r\n"));
     assert.match((await strangerReader.until("\r\n\r\n", 1024)).toString(), /^HTTP\/1\.1 407 /);
     stranger.destroy();
+
+    await logged("warn", "TCP", "sent no proxy password");
+    await logged("warn", "TCP", "proxy password rejected");
   }
+
+  // A port check closes before its first byte and leaves no line.
+  const probe = connect(proxy.port, "127.0.0.1");
+  await once(probe, "connect");
+  probe.end();
+  await once(probe, "close");
 
   const tcp = connect(proxy.port, "127.0.0.1");
   const reader = new ByteReader(tcp);
@@ -238,16 +264,33 @@ async function exercise(): Promise<void> {
   tcp.end();
   assert.equal(await reader.chunk(), undefined);
 
-  // Nothing listens on port 8079, so the internal host resets the connection.
+  // Nothing listens on port 8079, so the internal host resets the connection. The line names the
+  // host the resolver looked up.
   const refused = connect(proxy.port, "127.0.0.1");
   const refusedReader = new ByteReader(refused);
   await handshake(refused, refusedReader);
+  const spelled = Buffer.from("Intra\nnet.Test");
   await write(
     refused,
-    Buffer.concat([Buffer.from([5, 1, 0, 3, host.length]), host, Buffer.from([31, 143])]),
+    Buffer.concat([Buffer.from([5, 1, 0, 3, spelled.length]), spelled, Buffer.from([31, 143])]),
   );
   assert.equal((await refusedReader.read(10))[1], 1);
+  await logged("error", "TCP", String.raw`--> intranet\.test:8079 failed: .+`);
+  assert(!lines.some((line) => /^\[error\] \[TCP\] \S+ failed/.test(line)));
   refused.destroy();
+
+  // A name the resolver rejects shows its printable characters.
+  const invalid = connect(proxy.port, "127.0.0.1");
+  const invalidReader = new ByteReader(invalid);
+  await handshake(invalid, invalidReader);
+  const escaped = Buffer.from("a\u001b[2Jb.test");
+  await write(
+    invalid,
+    Buffer.concat([Buffer.from([5, 1, 0, 3, escaped.length]), escaped, Buffer.from([31, 144])]),
+  );
+  assert.notEqual((await invalidReader.read(10))[1], 0);
+  await logged("error", "TCP", String.raw`--> a\[2Jb\.test:8080 failed: Invalid hostname`);
+  invalid.destroy();
 
   const basic = auth && Buffer.from(`${auth.username}:${auth.password}`).toString("base64");
   const authorization = basic ? ["Proxy-Authorization: Basic " + basic] : [];
@@ -277,7 +320,12 @@ async function exercise(): Promise<void> {
     (await fixedReader.until("\r\n\r\n", 1024)).toString(),
     "HTTP/1.1 200 Connection Established",
   );
-  fixed.destroy();
+  fixed.resetAndDestroy();
+  await logged(
+    "info",
+    "TCP",
+    String.raw`--> fixed\.test:8080 closed after \d+s \(client reset\), .+`,
+  );
 
   // The echo server returns the request exactly as the proxy forwarded it.
   const forwarded = connect(proxy.port, "127.0.0.1");
@@ -330,6 +378,8 @@ async function exercise(): Promise<void> {
   assert.deepEqual(response, Buffer.from([0, 0, 0, 1, 10, 88, 0, 1, 31, 145, 97, 98, 99]));
   udp.close();
   control.destroy();
+  await logged("info", "UDP", "associated");
+  await logged("info", "UDP", String.raw`closed after \d+s, sent 3 B, received 3 B`);
 
   // A forwarded port joins its clients to one address in the tunnel, over TCP or UDP.
   const tcpForward = await forward(tunnel.stack, resolver, bind, {
@@ -360,7 +410,43 @@ async function exercise(): Promise<void> {
   assert.deepEqual((await echoed)[0], Buffer.from("ping"));
   client.close();
   await udpForward.close();
+  await logged(
+    "info",
+    "UDP",
+    String.raw`--> 10\.88\.0\.1:8081 closed after \d+s, sent 4 B, received 4 B`,
+  );
+
+  // SOCKS CONNECT, HTTP CONNECT, the TCP forward and nc each carried the payload both ways, and
+  // the plain GET carried its request.
+  const carried = await logged(
+    "info",
+    "TCP",
+    String.raw`--> intranet\.test:8080 closed after \d+s, sent 165\.0 kB, received 165\.0 kB`,
+  );
+  assert.equal(lines.filter((line) => carried.test(line)).length, auth ? 3 : 4);
+  await logged(
+    "info",
+    "TCP",
+    String.raw`--> intranet\.test:8080 closed after \d+s, sent \d+ B, .+`,
+  );
+  assert.equal(lines.filter((line) => line.includes("password rejected")).length, auth ? 1 : 0);
+
+  // Connections still open when the tunnel ends say so.
+  const held = connect(proxy.port, "127.0.0.1");
+  const heldReader = new ByteReader(held);
+  await handshake(held, heldReader);
+  await write(
+    held,
+    Buffer.concat([Buffer.from([5, 1, 0, 3, host.length]), host, Buffer.from([31, 144])]),
+  );
+  assert.equal((await heldReader.read(10))[1], 0);
+  markTunnelClosed();
   await proxy.close();
+  await logged(
+    "info",
+    "TCP",
+    String.raw`--> intranet\.test:8080 closed after \d+s \(tunnel closed\), .+`,
+  );
   tunnel.close();
   parentPort!.postMessage({ dns: true, tcp: true, udp: true });
 }

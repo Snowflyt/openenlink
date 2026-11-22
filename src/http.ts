@@ -3,6 +3,7 @@ import type { Socket } from "node:net";
 import type { NetworkStack } from "#tcpip";
 
 import type { Resolver } from "./dns.ts";
+import type { Flow } from "./flow.ts";
 import { relay } from "./relay.ts";
 import type { ByteReader } from "./stream.ts";
 import { write } from "./stream.ts";
@@ -20,6 +21,7 @@ const name = (field: string) => field.slice(0, field.indexOf(":")).trim().toLowe
 export async function serveHttp(
   socket: Socket,
   reader: ByteReader,
+  flow: Flow,
   stack: NetworkStack,
   resolver: Resolver,
   signal: AbortSignal,
@@ -34,17 +36,22 @@ export async function serveHttp(
     await respond(socket, "400 Bad Request");
     return;
   }
-  if (authorize && !authorized(fields, authorize)) {
+  // Clients send their first request without a password and repeat it after a 407.
+  const authorization = fields.find((field) => name(field) === "proxy-authorization");
+  if (authorize && !(authorization && authorized(authorization, authorize))) {
+    if (authorization) flow.warn("proxy password rejected");
     await respond(socket, "407 Proxy Authentication Required", [
       `Proxy-Authenticate: Basic realm="openenlink"`,
     ]);
     return;
   }
 
+  const port = Number(url.port || 80);
+  flow.to(url.hostname, port);
   let connection;
   try {
     const host = await resolver.lookup(url.hostname, signal);
-    connection = await stack.tcp.connect({ host, port: Number(url.port || 80) });
+    connection = await stack.tcp.connect({ host, port });
   } catch (error) {
     await respond(socket, "502 Bad Gateway");
     throw error;
@@ -52,7 +59,7 @@ export async function serveHttp(
 
   if (method === "CONNECT") {
     const reply = Buffer.from(`${version} 200 Connection Established\r\n\r\n`);
-    await relay(socket, reader, connection, { reply });
+    await relay(socket, reader, connection, flow, { reply });
     return;
   }
 
@@ -65,14 +72,13 @@ export async function serveHttp(
     "",
     "",
   ].join("\r\n");
-  await relay(socket, reader, connection, { request: Buffer.from(request, "latin1") });
+  await relay(socket, reader, connection, flow, { request: Buffer.from(request, "latin1") });
 }
 
 function authorized(
-  fields: string[],
+  field: string,
   authorize: (username: Buffer, password: Buffer) => boolean,
 ): boolean {
-  const field = fields.find((field) => name(field) === "proxy-authorization") ?? "";
   const [scheme = "", token = ""] = field
     .slice(field.indexOf(":") + 1)
     .trim()

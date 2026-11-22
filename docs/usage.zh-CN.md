@@ -102,15 +102,26 @@ curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
 
 ### 日志
 
-`serve` 输出的每一行以本地时间和级别开头。`debug` 和 `info` 写到标准输出，`warn` 和 `error` 写到标准错误：
+`serve` 输出的每一行以本地时间和级别开头。`debug` 和 `info` 写到标准输出，`warn` 和 `error` 写到标准错误。经过隧道的每条连接在打开时记一行，关闭或失败时再记一行：
 
 ```text
 [2026-11-21 09:43:02.123] [info] Proxy listening on 127.0.0.1:1088
+[2026-11-21 09:43:10.481] [info] [TCP] 127.0.0.1:52344 --> library.example.edu:443
+[2026-11-21 09:54:41.902] [info] [TCP] 127.0.0.1:52344 --> library.example.edu:443 closed after 11m31s, sent 48.2 kB, received 1.3 MB
+[2026-11-21 09:55:03.017] [error] [TCP] 127.0.0.1:52360 --> 10.20.0.5:8079 failed: tcp connection reset
 ```
 
-在 systemd 下，journal 会记录每一行的时间，`serve` 不再打印自己的时间。
+时长后面的 `(client reset)` 表示客户端重置了连接，`(tunnel closed)` 表示连接还开着时隧道断了。代理密码错误记为警告。
 
-`--log-level` 设定 `serve` 输出的最低级别：`error`、`warn`、`info`（默认）或 `debug`。
+`--log-level` 设定 `serve` 输出的最低级别：`error`、`warn`、`info`（默认）或 `debug`。`debug` 还会记录网关分配的地址、内网 DNS 的每个应答和会话续期。
+
+日志不记录传输的数据、密码、token 和 HTTP 请求的路径，但会记下访问的内网主机和发起连接的本地客户端。`--log-level warn` 只保留警告和错误。
+
+在 systemd 下，journal 会记录每一行的时间，`serve` 不再打印自己的时间。其他情况下可以这样把日志写进文件：
+
+```sh
+openenlink serve >> serve.log 2>&1
+```
 
 ### 多人共用的机器
 

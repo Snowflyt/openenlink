@@ -7,9 +7,10 @@ import type { Socket } from "node:net";
 import type { NetworkStack } from "#tcpip";
 
 import type { Resolver } from "./dns.ts";
+import { Flow, address } from "./flow.ts";
 import * as log from "./log.ts";
 import { relay } from "./relay.ts";
-import { ByteReader, peerLeft } from "./stream.ts";
+import { ByteReader } from "./stream.ts";
 
 export type Forward = { port: number; host: string; hostPort: number; udp: boolean };
 
@@ -19,12 +20,6 @@ export type Forwarding = { port: number; close: () => Promise<void> };
 // A UDP client keeps its tunnel socket, and with it the address replies come back to, until it has
 // sent and received nothing for a minute.
 const UDP_IDLE = 60_000;
-
-function report(rule: Forward, error: unknown): void {
-  log.error(
-    `Forwarding to ${rule.host}:${rule.hostPort} failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-  );
-}
 
 // Listens on bind:port and joins each connection, or each UDP client, to host:hostPort through the
 // tunnel.
@@ -55,23 +50,25 @@ async function forwardTcp(
       controller.abort();
     });
     const reader = new ByteReader(socket);
+    const flow = new Flow("TCP", socket);
+    flow.to(rule.host, rule.hostPort);
     void (async () => {
       const host = await resolver.lookup(rule.host, controller.signal);
       const connection = await stack.tcp.connect({ host, port: rule.hostPort });
-      // relay destroys the client socket however it ends, so only the error tells who failed.
-      await relay(socket, reader, connection, {}).catch((error: unknown) => {
-        if (!peerLeft(error)) report(rule, error);
-      });
-    })().catch((error: unknown) => {
-      if (!socket.destroyed) report(rule, error);
-      socket.destroy();
-    });
+      await relay(socket, reader, connection, flow, {});
+    })().then(
+      () => flow.end(),
+      (error: unknown) => {
+        flow.end(error);
+        socket.destroy();
+      },
+    );
   });
 
   server.listen(rule.port, bind);
   await once(server, "listening");
-  const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Forwarding has no port");
+  const listening = server.address();
+  if (!listening || typeof listening === "string") throw new Error("Forwarding has no port");
   return {
     close: async () => {
       for (const socket of clients) socket.destroy();
@@ -79,7 +76,7 @@ async function forwardTcp(
         server.close((error) => (error ? reject(error) : resolve()));
       });
     },
-    port: address.port,
+    port: listening.port,
   };
 }
 
@@ -97,6 +94,8 @@ async function forwardUdp(
 
   const open = (client: RemoteInfo): Session => {
     const key = `${client.address} ${client.port}`;
+    const flow = new Flow("UDP", address(client.address, client.port));
+    flow.to(rule.host, rule.hostPort);
     const ready = (async () => {
       const remote = await stack.udp.open();
       try {
@@ -109,9 +108,10 @@ async function forwardUdp(
     })();
     let queue: Promise<unknown> = ready;
 
-    const close = async () => {
+    const close = async (error?: unknown) => {
       sessions.delete(key);
       clearTimeout(timer);
+      flow.end(error);
       const opened = await ready.catch(() => undefined);
       if (!opened) return;
       opened.writer.releaseLock();
@@ -119,14 +119,14 @@ async function forwardUdp(
     };
     const end = (error?: unknown) => {
       if (sessions.get(key) !== session) return;
-      if (error) report(rule, error);
-      void close();
+      void close(error);
     };
     const timer = setTimeout(end, UDP_IDLE);
     const session: Session = {
-      close,
+      close: () => close(),
       send: (data) => {
         timer.refresh();
+        flow.sent += data.length;
         queue = queue.then(async () => {
           const { host, writer } = await ready;
           await writer.write({ data, host, port: rule.hostPort });
@@ -137,9 +137,11 @@ async function forwardUdp(
 
     void ready
       .then(async ({ host, remote }) => {
+        flow.open();
         for await (const packet of remote) {
           if (packet.host !== host || packet.port !== rule.hostPort) continue;
           timer.refresh();
+          flow.received += packet.data.length;
           local.send(packet.data, client.port, client.address);
         }
       })
@@ -153,7 +155,9 @@ async function forwardUdp(
   });
   local.bind(rule.port, bind);
   await once(local, "listening");
-  local.on("error", (error) => report(rule, error));
+  local.on("error", (error) => {
+    log.error(`[UDP] forwarding port ${String(local.address().port)} failed: ${error.message}`);
+  });
   return {
     close: async () => {
       controller.abort();
