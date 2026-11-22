@@ -22,6 +22,7 @@ const USAGE = `Usage:
   openenlink serve [--bind 127.0.0.1] [--port 1088] [--proxy-user name]
                    [--add-host name=address]...
                    [--forward port:host:hostport[/udp]]...
+                   [--log-level error|warn|info|debug]
   openenlink nc host port [--port 1088]
   openenlink status
   openenlink logout`;
@@ -172,10 +173,14 @@ async function main(): Promise<void> {
         "add-host": { multiple: true, type: "string" },
         bind: { type: "string" },
         forward: { multiple: true, type: "string" },
+        "log-level": { type: "string" },
         port: { type: "string" },
         "proxy-user": { type: "string" },
       },
     });
+    const logLevel = log.LEVELS.find((level) => level === (values["log-level"] ?? "info"));
+    if (!logLevel) throw new UsageError("--log-level needs error, warn, info or debug");
+    log.setLevel(logLevel);
     const host = values.bind ?? "127.0.0.1";
     if (!isIP(host)) throw new UsageError("--bind needs an IP address");
     const port = portNumber(values.port ?? 1088);
@@ -220,11 +225,10 @@ async function main(): Promise<void> {
     const controller = new AbortController();
     process.once("SIGINT", () => controller.abort());
     process.once("SIGTERM", () => controller.abort());
-    await serve(config, { auth, forwards, host, hosts, port }, controller.signal).catch(
-      (error: unknown) => {
-        if (!controller.signal.aborted) throw error;
-      },
-    );
+    const listener = { auth, forwards, host, hosts, logLevel, port };
+    await serve(config, listener, controller.signal).catch((error: unknown) => {
+      if (!controller.signal.aborted) throw error;
+    });
     return;
   }
 

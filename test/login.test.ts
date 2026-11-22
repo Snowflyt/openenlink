@@ -375,7 +375,7 @@ await test("Renew an expired session with the session cookies, then the password
   const run = () =>
     serve(
       { server: "https://vpn.example.test" },
-      { host: "127.0.0.1", forwards: [], hosts: new Map(), port: 1088 },
+      { host: "127.0.0.1", forwards: [], hosts: new Map(), logLevel: "info", port: 1088 },
       new AbortController().signal,
     );
 

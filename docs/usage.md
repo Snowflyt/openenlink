@@ -8,6 +8,7 @@ openenlink login [https://vpn.example.edu] [--user name] [--remember] [--browser
 openenlink serve [--bind 127.0.0.1] [--port 1088] [--proxy-user name]
                  [--add-host name=address]...
                  [--forward port:host:hostport[/udp]]...
+                 [--log-level error|warn|info|debug]
 openenlink nc host port [--port 1088]
 openenlink status
 openenlink logout
@@ -101,13 +102,15 @@ Signing in elsewhere can take the authorization over the account's limit of simu
 
 ### Log
 
-Each line from `serve` starts with the local time and a level. `info` goes to standard output, `warn` and `error` to standard error:
+Each line from `serve` starts with the local time and a level. `debug` and `info` go to standard output, `warn` and `error` to standard error:
 
 ```text
 [2026-11-21 09:43:02.123] [info] Proxy listening on 127.0.0.1:1088
 ```
 
 Under systemd the journal records the time of each line, and `serve` leaves its own out.
+
+`--log-level` sets the lowest level that `serve` prints: `error`, `warn`, `info`, which is the default, or `debug`.
 
 ### Shared machines
 

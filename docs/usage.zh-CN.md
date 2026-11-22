@@ -8,6 +8,7 @@ openenlink login [https://vpn.example.edu] [--user name] [--remember] [--browser
 openenlink serve [--bind 127.0.0.1] [--port 1088] [--proxy-user name]
                  [--add-host name=address]...
                  [--forward port:host:hostport[/udp]]...
+                 [--log-level error|warn|info|debug]
 openenlink nc host port [--port 1088]
 openenlink status
 openenlink logout
@@ -101,13 +102,15 @@ curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
 
 ### 日志
 
-`serve` 输出的每一行以本地时间和级别开头。`info` 写到标准输出，`warn` 和 `error` 写到标准错误：
+`serve` 输出的每一行以本地时间和级别开头。`debug` 和 `info` 写到标准输出，`warn` 和 `error` 写到标准错误：
 
 ```text
 [2026-11-21 09:43:02.123] [info] Proxy listening on 127.0.0.1:1088
 ```
 
 在 systemd 下，journal 会记录每一行的时间，`serve` 不再打印自己的时间。
+
+`--log-level` 设定 `serve` 输出的最低级别：`error`、`warn`、`info`（默认）或 `debug`。
 
 ### 多人共用的机器
 

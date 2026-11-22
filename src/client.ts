@@ -28,6 +28,7 @@ export async function serve(
     auth?: ProxyAuth;
     hosts: Map<string, string>;
     forwards: Forward[];
+    logLevel: log.Level;
   },
   signal: AbortSignal,
 ): Promise<void> {

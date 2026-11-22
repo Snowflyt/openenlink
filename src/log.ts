@@ -1,13 +1,21 @@
-// Lines from serve, which runs for days: info goes to standard output, warnings and errors to
-// standard error, each after the local time and its level.
+// Lines from serve, which runs for days: debug and info go to standard output, warnings and errors
+// to standard error, each after the local time and its level. Lines below the chosen level are
+// dropped. Each worker thread keeps its own level.
 
 import { fstatSync } from "node:fs";
 import { isatty } from "node:tty";
 import { styleText } from "node:util";
 
-type Level = "info" | "warn" | "error";
+export const LEVELS = ["debug", "info", "warn", "error"] as const;
+export type Level = (typeof LEVELS)[number];
 
-const COLORS = { info: "green", warn: "yellow", error: "red" } as const;
+const COLORS = { debug: "dim", info: "green", warn: "yellow", error: "red" } as const;
+
+let threshold = LEVELS.indexOf("info");
+
+export function setLevel(level: Level): void {
+  threshold = LEVELS.indexOf(level);
+}
 
 export function timestamp(date: Date): string {
   const pad = (value: number, length = 2) => String(value).padStart(length, "0");
@@ -30,7 +38,8 @@ function journal(fd: number): boolean {
 const streams = new Map<number, { time: boolean; color: boolean }>();
 
 function write(level: Level, message: string): void {
-  const fd = level === "info" ? 1 : 2;
+  if (LEVELS.indexOf(level) < threshold) return;
+  const fd = level === "debug" || level === "info" ? 1 : 2;
   let stream = streams.get(fd);
   if (!stream) {
     // A worker's process.stdout is no TTY even in a terminal, so the descriptor decides.
@@ -42,6 +51,10 @@ function write(level: Level, message: string): void {
   const line = `${time}[${tag}] ${message}`;
   if (fd === 1) console.log(line);
   else console.error(line);
+}
+
+export function debug(message: string): void {
+  write("debug", message);
 }
 
 export function info(message: string): void {
