@@ -97,6 +97,7 @@ async function session(
       throw error;
     let renewed;
     if (credentials.refreshToken) {
+      log.debug(`${error.message}; renewing the session with the refresh token`);
       try {
         renewed = await controller.refresh(credentials.refreshToken, signal);
       } catch (error) {

@@ -5,6 +5,7 @@ import { connect } from "node:tls";
 import { createStack } from "#tcpip";
 import type { NetworkStack, TunInterface } from "#tcpip";
 
+import * as log from "./log.ts";
 import { rewriteAddress } from "./packet.ts";
 import { authentication, frame, readAuthentication, readPacket } from "./protocol.ts";
 import type { Addresses } from "./protocol.ts";
@@ -107,12 +108,18 @@ export class Tunnel {
         await write(this.socket, frame(4, 0x29000000, data));
       }
     };
+    const shapes = new Set<string>();
     const receive = async () => {
       while (!signal.aborted) {
         const packet = await readPacket(reader);
         received = Date.now();
         if (packet.kind === 4) {
           await writer.write(rewriteAddress(packet.body, 12, this.addresses.dns, this.dnsServer));
+        } else {
+          // Each kind and length once, since the gateway may answer every heartbeat.
+          const shape = `type ${String(packet.kind)}, ${String(packet.body.length)} bytes`;
+          if (!shapes.has(shape)) log.debug(`Gateway sent a frame of ${shape}`);
+          shapes.add(shape);
         }
       }
     };

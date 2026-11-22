@@ -1,7 +1,7 @@
 import { parentPort, workerData } from "node:worker_threads";
 
 import { Resolver } from "./dns.ts";
-import { flowsEnded, markTunnelClosed } from "./flow.ts";
+import { address, flowsEnded, markTunnelClosed } from "./flow.ts";
 import { forward } from "./forward.ts";
 import type { Forward } from "./forward.ts";
 import * as log from "./log.ts";
@@ -27,6 +27,11 @@ const options = workerData as TunnelOptions;
 log.setLevel(options.logLevel);
 const tunnel = await Tunnel.connect(options.gateway, options.user, options.token);
 void tunnel.done.catch(() => {});
+const { dns, ipv4, ipv6 } = tunnel.addresses;
+const assigned = ipv6 ? `${ipv4} and ${ipv6}` : ipv4;
+log.debug(
+  `Gateway ${address(options.gateway.host, options.gateway.port)} assigned ${assigned}, DNS ${dns}`,
+);
 const resolver = new Resolver(tunnel.stack, tunnel.dnsServer, options.hosts);
 const proxy = await ProxyServer.listen(tunnel.stack, resolver, options, options.auth);
 const forwards = await Promise.all(

@@ -6,6 +6,8 @@ import packet from "dns-packet";
 
 import type { NetworkStack } from "#tcpip";
 
+import * as log from "./log.ts";
+
 // Names in lookups and in fixed entries compare in this form: ASCII, lowercase, no final dot.
 export function hostName(host: string): string {
   return domainToASCII(host).toLowerCase().replace(/\.$/, "");
@@ -29,9 +31,15 @@ export class Resolver {
     const original = hostName(host);
     if (!original) throw new Error("Invalid hostname");
     const fixed = this.hosts.get(original);
-    if (fixed) return fixed;
+    if (fixed) {
+      log.debug(`[DNS] ${original} --> ${fixed} (fixed)`);
+      return fixed;
+    }
     const cached = this.cache.get(original);
-    if (cached && cached.expires > Date.now()) return cached.address;
+    if (cached && cached.expires > Date.now()) {
+      log.debug(`[DNS] ${original} --> ${cached.address} (cached)`);
+      return cached.address;
+    }
 
     let name = original;
     let ttl = Infinity;
@@ -52,6 +60,7 @@ export class Resolver {
             address: record.data,
             expires: Date.now() + Math.min(ttl, record.ttl ?? 0) * 1000,
           });
+          log.debug(`[DNS] ${original} --> ${record.data}`);
           return record.data;
         }
         const alias = answers.find(

@@ -20,6 +20,7 @@ import { createStack } from "#tcpip";
 import { Resolver } from "../src/dns.ts";
 import { markTunnelClosed } from "../src/flow.ts";
 import { forward } from "../src/forward.ts";
+import * as log from "../src/log.ts";
 import { ProxyServer } from "../src/proxy.ts";
 import type { ProxyAuth } from "../src/proxy.ts";
 import { ByteReader, write } from "../src/stream.ts";
@@ -61,6 +62,7 @@ async function exercise(): Promise<void> {
   };
   console.log = capture;
   console.error = capture;
+  log.setLevel("debug");
   // Each pattern is matched against whole lines, after "[level] [TCP] 127.0.0.1:port".
   const logged = async (level: string, protocol: string, rest: string) => {
     const pattern = new RegExp(String.raw`^\[${level}\] \[${protocol}\] 127\.0\.0\.1:\d+ ${rest}$`);
@@ -430,6 +432,11 @@ async function exercise(): Promise<void> {
     String.raw`--> intranet\.test:8080 closed after \d+s, sent \d+ B, .+`,
   );
   assert.equal(lines.filter((line) => line.includes("password rejected")).length, auth ? 1 : 0);
+
+  // The resolver asks the gateway once and answers again from its cache.
+  assert(lines.includes("[debug] [DNS] intranet.test --> 10.88.0.1"));
+  assert(lines.includes("[debug] [DNS] intranet.test --> 10.88.0.1 (cached)"));
+  assert(lines.includes("[debug] [DNS] fixed.test --> 10.88.0.1 (fixed)"));
 
   // Connections still open when the tunnel ends say so.
   const held = connect(proxy.port, "127.0.0.1");
