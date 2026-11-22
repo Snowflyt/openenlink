@@ -70,6 +70,7 @@ Other Enlink gateways that offer OIDC single sign-on work through a browser: `lo
 ## Documentation
 
 - [Usage](docs/usage.md): commands, options, credential storage and exit statuses.
+- [Running as a service](docs/services.md): systemd, Docker, launchd and Task Scheduler.
 - [Soochow University](docs/adapters/suda.md): the gateway and its sign-in page.
 - [Contributing](CONTRIBUTING.md): setup, checks, commit format and pull requests.
 - [Writing an adapter](docs/adapters/README.md): an adapter for another sign-in page.

@@ -191,4 +191,4 @@ It keeps the authorization and any remembered password as plain JSON in `credent
 
 On Linux and macOS, Ctrl+C ends the command by the signal itself. The shell reports 130, and a loop typed at the shell prompt stops as well. `serve` stopped with SIGTERM exits with 0.
 
-A script that restarts `serve` can stop at status 3. Under systemd, `RestartPreventExitStatus=3` does this for `Restart=on-failure`.
+A script that restarts `serve` can stop at status 3. Under systemd, `RestartPreventExitStatus=3` does this for `Restart=on-failure`. [Running as a service](services.md) has setups for systemd, Docker, launchd and Task Scheduler.

@@ -70,6 +70,7 @@ curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
 ## 文档
 
 - [使用说明](docs/usage.zh-CN.md)：命令、选项、凭据存储和退出状态。
+- [作为服务运行](docs/services.zh-CN.md)：systemd、Docker、launchd 和任务计划程序。
 - [苏州大学](docs/adapters/suda.zh-CN.md)：网关和登录页。
 - [Contributing](CONTRIBUTING.md)：环境、检查命令、提交格式和 Pull Request。
 - [Writing an adapter](docs/adapters/README.md)：为其他登录页编写适配器。
