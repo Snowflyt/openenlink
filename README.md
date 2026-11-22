@@ -36,17 +36,22 @@ xattr -d com.apple.quarantine openenlink
 
 Slim Linux container images omit required shared libraries. Install `libatomic1` on Debian and Ubuntu. On Alpine, install `libstdc++`, plus `libatomic` on x64.
 
-Other systems, Intel Macs included, [run from source](docs/building.md).
+Intel Macs [run from source](docs/building.md).
 
 ## Get started
 
+In the directory that holds the file, or with `.\openenlink` in Windows Command Prompt:
+
 ```sh
-openenlink login https://vpn.example.edu
-openenlink serve
-curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
+./openenlink login https://vpn.example.edu
+./openenlink serve
 ```
 
-`login` saves the authorization for the gateway locally. `serve` runs in the foreground and listens on `127.0.0.1:1088` for SOCKS5 and HTTP proxy requests.
+`login` saves the authorization for the gateway locally. `serve` runs in the foreground and listens on `127.0.0.1:1088` for SOCKS5 and HTTP proxy requests. While it runs, try the proxy from another terminal:
+
+```sh
+curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
+```
 
 See [Usage](docs/usage.md) for all commands and options, including SSH via `openenlink nc`.
 

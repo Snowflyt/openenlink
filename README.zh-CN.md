@@ -36,17 +36,22 @@ xattr -d com.apple.quarantine openenlink
 
 精简 Linux 容器镜像缺少运行时依赖库。Debian 和 Ubuntu 需安装 `libatomic1`，Alpine 需安装 `libstdc++`，Alpine x64 还需安装 `libatomic`。
 
-其他系统（包括 Intel Mac）[从源码运行](docs/building.md)。
+Intel Mac [从源码运行](docs/building.md)。
 
 ## 开始使用
 
+在文件所在目录执行，Windows 命令提示符里写作 `.\openenlink`：
+
 ```sh
-openenlink login https://vpn.example.edu
-openenlink serve
-curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
+./openenlink login https://vpn.example.edu
+./openenlink serve
 ```
 
-`login` 登录并将授权保存在本机。`serve` 在前台运行，监听 `127.0.0.1:1088` 提供 SOCKS5 和 HTTP 代理。
+`login` 登录并将授权保存在本机。`serve` 在前台运行，监听 `127.0.0.1:1088` 提供 SOCKS5 和 HTTP 代理。运行期间可在另一个终端里试用代理：
+
+```sh
+curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
+```
 
 全部命令和选项见[使用说明](docs/usage.zh-CN.md)，包括通过 `openenlink nc` 转发 SSH。
 
