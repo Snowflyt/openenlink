@@ -163,7 +163,7 @@ openenlink logout
 
 `status` reports whether an authorization is saved and which username is remembered. It reads only what this machine saved and sends nothing to the gateway.
 
-`logout` removes the authorization and the remembered password from this machine.
+`logout` removes the saved gateway's authorization and remembered password from this machine. Stop `serve` first: a running `serve` keeps its tunnel and can save a renewed authorization again.
 
 ## Where credentials are kept
 
