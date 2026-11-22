@@ -8,6 +8,35 @@ function stty(mode: string): void {
     throw new Error(`stty ${mode} failed`);
 }
 
+// A prompt ended by a signal, such as Ctrl+C. The terminal is restored by then, and the command
+// ends with the same signal.
+export class Interrupted extends Error {
+  readonly signal: NodeJS.Signals;
+
+  constructor(signal: NodeJS.Signals) {
+    super(`Interrupted by ${signal}`);
+    this.signal = signal;
+  }
+}
+
+const ENDED = "Standard input ended before an answer";
+
+// The signals that end a prompt. Handling them keeps Node from exiting before the terminal
+// gets its echo or line mode back.
+const SIGNALS: NodeJS.Signals[] =
+  process.platform === "win32" ? ["SIGINT"] : ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT"];
+
+function onSignals(stop: (signal: NodeJS.Signals) => void): () => void {
+  const handlers = SIGNALS.map((signal) => {
+    const handler = () => stop(signal);
+    process.once(signal, handler);
+    return { handler, signal };
+  });
+  return () => {
+    for (const { handler, signal } of handlers) process.off(signal, handler);
+  };
+}
+
 async function question(prompt: string, options: { echo: boolean; lineMode: boolean }) {
   // In raw mode readline redraws its line and echoes typed characters to its output. A hidden
   // answer discards that output, so its prompt is written here.
@@ -20,16 +49,24 @@ async function question(prompt: string, options: { echo: boolean; lineMode: bool
     terminal: process.stdin.isTTY && !options.lineMode,
   });
   const cancel = new AbortController();
-  const interrupt = () => cancel.abort();
-  input.once("SIGINT", interrupt);
-  input.once("close", interrupt);
-  process.once("SIGINT", interrupt);
+  let reason: NodeJS.Signals | "end" | undefined;
+  const stop = (why: NodeJS.Signals | "end") => {
+    reason ??= why;
+    cancel.abort();
+  };
+  input.once("SIGINT", () => stop("SIGINT"));
+  input.once("close", () => stop("end"));
+  const release = onSignals(stop);
   if (options.lineMode) stty("-echo");
   try {
     return await input.question(options.echo ? prompt : "", { signal: cancel.signal });
+  } catch (error) {
+    if (reason === "end") throw new Error(ENDED, { cause: error });
+    if (reason) throw new Interrupted(reason);
+    throw error;
   } finally {
     if (options.lineMode) stty("echo");
-    process.off("SIGINT", interrupt);
+    release();
     input.close();
     if (!options.echo) process.stderr.write("\n");
   }
@@ -58,16 +95,19 @@ export async function askPaste(prompt: string): Promise<string> {
   stdin.setRawMode(true);
   stdin.resume();
   let line = "";
+  let reason: NodeJS.Signals | "end" | undefined;
+  let release = () => {};
   try {
     return await new Promise<string>((resolve, reject) => {
+      const stop = (why: NodeJS.Signals | "end") => {
+        reason ??= why;
+        finish(() => reject(why === "end" ? new Error(ENDED) : new Interrupted(why)));
+      };
       const data = (chunk: Buffer) => {
         for (const char of chunk.toString()) {
           if (char === "\r" || char === "\n") return finish(() => resolve(line));
-          if (char === "\x03" || (char === "\x04" && !line)) {
-            const cancel = new AbortController();
-            cancel.abort();
-            return finish(() => reject(cancel.signal.reason as Error));
-          }
+          if (char === "\x03") return stop("SIGINT");
+          if (char === "\x04" && !line) return stop("end");
           if (char === "\x7f" || char === "\b") line = Array.from(line).slice(0, -1).join("");
           else if (char >= " ") line += char;
         }
@@ -77,10 +117,12 @@ export async function askPaste(prompt: string): Promise<string> {
         settle();
       };
       stdin.on("data", data);
+      release = onSignals(stop);
     });
   } finally {
+    release();
     stdin.setRawMode(false);
     stdin.pause();
-    process.stderr.write(line ? `(${String(line.length)} characters)\n` : "\n");
+    process.stderr.write(line && !reason ? `(${String(line.length)} characters)\n` : "\n");
   }
 }

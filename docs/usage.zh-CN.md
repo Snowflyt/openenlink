@@ -187,5 +187,8 @@ openenlink login https://vpn.example.edu --insecure-storage
 | 1    | 命令失败，原因不属于下面两种。    |
 | 2    | 参数有误，同时打印用法。          |
 | 3    | 需要重新执行 `openenlink login`。 |
+| 130  | 被 Ctrl+C 中断。                  |
 
-自动重启 `serve` 的脚本可以在状态 3 时停止。
+在 Linux 和 macOS 上，Ctrl+C 会让命令直接被该信号结束。shell 报告状态 130，在 shell 提示符下输入的循环也会一起停下。`serve` 收到 SIGTERM 时以 0 退出。
+
+自动重启 `serve` 的脚本可以在状态 3 时停止。在 systemd 下，`RestartPreventExitStatus=3` 让 `Restart=on-failure` 在状态 3 时不再重启。

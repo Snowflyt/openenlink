@@ -14,7 +14,7 @@ import * as log from "./log.ts";
 import { login, pastedLogin } from "./login.ts";
 import type { SignIn } from "./login.ts";
 import { nc } from "./nc.ts";
-import { ask, askPaste, askSecret } from "./prompt.ts";
+import { Interrupted, ask, askPaste, askSecret } from "./prompt.ts";
 
 const USAGE = `Usage:
   openenlink login [https://vpn.example.edu] [--user name] [--remember] [--browser]
@@ -223,12 +223,19 @@ async function main(): Promise<void> {
     }
 
     const controller = new AbortController();
-    process.once("SIGINT", () => controller.abort());
-    process.once("SIGTERM", () => controller.abort());
+    let stopped: NodeJS.Signals | undefined;
+    const stop = (signal: NodeJS.Signals) => {
+      stopped = signal;
+      controller.abort();
+    };
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
     const listener = { auth, forwards, host, hosts, logLevel, port };
     await serve(config, listener, controller.signal).catch((error: unknown) => {
       if (!controller.signal.aborted) throw error;
     });
+    // systemd counts exit status 0 as a clean stop; Ctrl+C ends with its signal, as at a prompt.
+    if (stopped === "SIGINT") throw new Interrupted(stopped);
     return;
   }
 
@@ -262,6 +269,13 @@ async function main(): Promise<void> {
 }
 
 await main().catch((error: unknown) => {
+  // A command stopped by a signal ends by that signal, without a message, so a loop around it at
+  // the shell prompt stops too. Windows has no such end and takes the shell's 128 + 2.
+  if (error instanceof Interrupted) {
+    if (process.platform === "win32") process.exitCode = 130;
+    else process.kill(process.pid, error.signal);
+    return;
+  }
   const usage =
     error instanceof UsageError ||
     String((error as { code?: unknown }).code).startsWith("ERR_PARSE_ARGS");

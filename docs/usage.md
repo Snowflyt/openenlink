@@ -187,5 +187,8 @@ It keeps the authorization and any remembered password as plain JSON in `credent
 | 1      | The command failed for a reason not listed below. |
 | 2      | Invalid arguments. The usage text is printed.     |
 | 3      | Sign in again with `openenlink login`.            |
+| 130    | Stopped with Ctrl+C.                              |
 
-A script that restarts `serve` can stop at status 3.
+On Linux and macOS, Ctrl+C ends the command by the signal itself. The shell reports 130, and a loop typed at the shell prompt stops as well. `serve` stopped with SIGTERM exits with 0.
+
+A script that restarts `serve` can stop at status 3. Under systemd, `RestartPreventExitStatus=3` does this for `Restart=on-failure`.
