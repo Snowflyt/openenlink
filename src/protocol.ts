@@ -84,6 +84,7 @@ export async function readAuthentication(reader: ByteReader): Promise<Addresses>
 }
 
 export async function readPacket(reader: ByteReader): Promise<{ kind: number; body: Buffer }> {
+  if ((await reader.peek()) === undefined) throw new Error("Gateway closed the connection");
   // Gateway data packets use an 8-byte header; client packets use 12 bytes.
   const header = await reader.read(8);
   const length = header.readUInt16BE(2);
