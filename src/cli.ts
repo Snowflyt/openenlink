@@ -132,6 +132,7 @@ async function main(): Promise<void> {
       ...(values["insecure-storage"] ? { insecureStorage: true } : {}),
     };
     const store = credentialStore(config);
+    store.open();
     const where = store.file ?? "the OS credential store";
     const controller = new Controller(config.server, { userAgent: config.userAgent });
     try {

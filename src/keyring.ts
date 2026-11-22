@@ -252,6 +252,7 @@ function linux(): Keyring {
       return dlopen("libsecret-1.so.0", {
         secret_item_delete_sync: { arguments: ["pointer", "pointer", "pointer"], return: "int32" },
         secret_item_get_locked: { arguments: ["pointer"], return: "int32" },
+        secret_service_get_sync: { arguments: ["int32", "pointer", "pointer"], return: "pointer" },
         secret_service_lookup_sync: {
           arguments: ["pointer", "pointer", "pointer", "pointer", "pointer"],
           return: "pointer",
@@ -304,6 +305,7 @@ function linux(): Keyring {
   });
   const BUS_SESSION = 2;
   const DBUS_SERVICE_UNKNOWN = 2;
+  const OPEN_SESSION = 1 << 1;
   const free = lib.getSymbol("g_free");
   const SEARCH_ALL = 1 << 1;
   const SEARCH_UNLOCK = 1 << 2;
@@ -342,6 +344,12 @@ function linux(): Keyring {
   // libsecret reaches the Secret Service over the session bus, which containers and servers
   // without a desktop session lack.
   gobject.g_object_unref(call((error) => gio.g_bus_get_sync(BUS_SESSION, null, error), true));
+  // A bus without a provider shows only when a call reaches the Secret Service. Opening a session
+  // reaches it without a prompt, starts a provider that D-Bus can activate, and leaves the session
+  // to the calls that follow.
+  gobject.g_object_unref(
+    call((error) => libsecret.secret_service_get_sync(OPEN_SESSION, null, error), true),
+  );
 
   // Runs on every item that matches, then frees the items and the list.
   function each(service: string, account: string, flags: number, run: (item: bigint) => void) {

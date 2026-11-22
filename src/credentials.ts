@@ -35,6 +35,12 @@ export class CredentialStore {
     this.file = file;
   }
 
+  // Opens the OS credential store, which fails when its libraries, the session bus or the Secret
+  // Service are missing. login opens it before asking for a password, so the failure comes first.
+  open(): void {
+    if (!this.file) osKeyring();
+  }
+
   async load(): Promise<Credentials | undefined> {
     const value = await this.read("authorization");
     if (!value) return;
