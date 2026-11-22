@@ -5,7 +5,13 @@ import { Worker } from "node:worker_threads";
 import { UnsupportedLogin } from "./adapter.ts";
 import { credentialStore } from "./config.ts";
 import type { Config } from "./config.ts";
-import { AuthenticationError, Controller, PolicyError, tunnelRules } from "./controller.ts";
+import {
+  AuthenticationError,
+  Controller,
+  PolicyError,
+  SessionTaken,
+  tunnelRules,
+} from "./controller.ts";
 import type { CredentialStore, Credentials, RememberedPassword } from "./credentials.ts";
 import type { Forward } from "./forward.ts";
 import * as log from "./log.ts";
@@ -29,6 +35,7 @@ export async function serve(
   const controller = new Controller(config.server, { userAgent: config.userAgent });
   let retry = 1000;
   let gatewayIndex = 0;
+  let connected = false;
   try {
     for (;;) {
       signal.throwIfAborted();
@@ -45,7 +52,9 @@ export async function serve(
           store,
           limit,
           config.userAgent,
+          !connected,
         );
+        connected = true;
         const gateway = gateways[gatewayIndex++ % gateways.length];
         const started = Date.now();
         await runWorker({ gateway, ...listener, token, user }, signal).finally(() => {
@@ -74,13 +83,17 @@ async function session(
   credentials: Credentials,
   store: CredentialStore,
   signal: AbortSignal,
-  userAgent?: string,
+  userAgent: string | undefined,
+  starting: boolean,
 ): Promise<{ user: string; token: string; gateways: Gateway[] }> {
   try {
     const user = await controller.user(credentials.accessToken, signal);
     return { ...tunnelRules(await controller.rules(credentials.accessToken, signal)), user };
   } catch (error) {
-    if (!(error instanceof AuthenticationError)) throw error;
+    // A serve that was just started takes the account back from a newer sign-in. Once connected,
+    // it leaves the account to that sign-in, so two machines do not keep taking it from each other.
+    if (!(error instanceof AuthenticationError) || (error instanceof SessionTaken && !starting))
+      throw error;
     let renewed;
     if (credentials.refreshToken) {
       try {

@@ -97,6 +97,8 @@ curl --proxy http://127.0.0.1:1088 https://intranet.example.edu/
 
 授权过期时，`serve` 用网关的 refresh token 或已保存的登录信息续期。两者都失败时，以状态 3 退出，需要重新执行 `openenlink login`。
 
+在别处登录可能超过账号同时登录的上限，挤掉这里的授权。刚启动的 `serve` 会续期，把账号拿回来。已经连上过的 `serve` 则以状态 3 退出，把账号留给新的登录。
+
 ### 日志
 
 `serve` 输出的每一行以本地时间和级别开头。`info` 写到标准输出，`warn` 和 `error` 写到标准错误：

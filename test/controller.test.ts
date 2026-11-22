@@ -5,6 +5,8 @@ import { test } from "node:test";
 import {
   AuthenticationError,
   Controller,
+  PolicyError,
+  SessionTaken,
   serverOrigin,
   signature,
   tunnelRules,
@@ -109,14 +111,21 @@ await test("Controller recognizes expired sessions returned with HTTP 200", asyn
 });
 
 await test("Controller rejections carry the server's message", async () => {
+  let code = "1001";
   const controller = new Controller("https://vpn.example.test", {
-    fetch: () =>
-      Promise.resolve(Response.json({ code: "1001", messages: "Signed in\u001b[2J elsewhere" })),
+    fetch: () => Promise.resolve(Response.json({ code, messages: "Signed in\u001b[2J elsewhere" })),
   });
   try {
-    await assert.rejects(controller.user("taken"), {
-      message: "Controller rejected /enclient/api/users/info, code 1001: Signed in[2J elsewhere",
+    await assert.rejects(controller.user("taken"), (error) => {
+      assert(error instanceof SessionTaken);
+      assert.equal(
+        error.message,
+        "Controller rejected /enclient/api/users/info, code 1001: Signed in[2J elsewhere",
+      );
+      return true;
     });
+    code = "1000";
+    await assert.rejects(controller.user("refused"), PolicyError);
   } finally {
     await controller.close();
   }

@@ -8,6 +8,8 @@ import type { Gateway } from "./tunnel.ts";
 import { printable } from "./web.ts";
 
 export class AuthenticationError extends Error {}
+// Code 1001: a newer sign-in on the same account took this session.
+export class SessionTaken extends AuthenticationError {}
 export class PolicyError extends Error {}
 
 export function serverOrigin(server: string): string {
@@ -118,9 +120,10 @@ export class Controller {
           result.code
         : "invalid";
       const reason = typeof result.messages === "string" ? printable(result.messages) : "";
-      throw new PolicyError(
-        [`Controller rejected ${url.pathname}, code ${code}`, reason].filter(Boolean).join(": "),
-      );
+      const message = [`Controller rejected ${url.pathname}, code ${code}`, reason]
+        .filter(Boolean)
+        .join(": ");
+      throw code === "1001" ? new SessionTaken(message) : new PolicyError(message);
     }
     return object(result.data);
   }

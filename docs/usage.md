@@ -97,6 +97,8 @@ After a dropped tunnel, `serve` reconnects by itself. The delay starts at one se
 
 When the authorization expires, `serve` renews it using the gateway's refresh token or the remembered credentials. If neither works, it exits with status 3. Run `openenlink login` again.
 
+Signing in elsewhere can take the authorization over the account's limit of simultaneous sign-ins. A `serve` that has just started then renews it and takes the account back. Once it has connected, it exits with status 3 instead, and leaves the account to the newer sign-in.
+
 ### Log
 
 Each line from `serve` starts with the local time and a level. `info` goes to standard output, `warn` and `error` to standard error:
