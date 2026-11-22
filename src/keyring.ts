@@ -402,6 +402,14 @@ function linux(): Keyring {
             ),
           ),
         );
+      } catch (error) {
+        // Without a desktop session the provider cannot ask to create or unlock the default
+        // keyring, and saving fails.
+        if (!(error instanceof Error) || error.message === NO_SERVICE) throw error;
+        throw new Error(
+          `${error.message}; unlock or create the default keyring, or use login --insecure-storage`,
+          { cause: error },
+        );
       } finally {
         libsecret.secret_value_unref(value);
       }
