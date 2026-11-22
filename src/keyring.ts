@@ -216,7 +216,9 @@ function windows(): Keyring {
     write(service, account, secret) {
       const blob = Buffer.from(secret, "utf16le");
       if (blob.length > MAX_BLOB)
-        throw new Error(`Credential Manager holds at most ${MAX_BLOB} bytes per secret`);
+        throw new Error(
+          `Credential Manager holds at most ${MAX_BLOB} bytes per secret; use login --insecure-storage`,
+        );
       const name = target(service, account);
       const user = wide(account);
       // CREDENTIALW is 80 bytes. The strings and blob follow it in the same buffer, so the
