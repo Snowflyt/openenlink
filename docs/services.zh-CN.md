@@ -119,6 +119,8 @@ launchctl bootout gui/$(id -u)/edu.example.openenlink
 
 崩溃后约 10 秒重启。`launchctl print gui/$(id -u)/edu.example.openenlink` 显示运行状态和上次的退出状态。状态 3 时执行 `openenlink login` 后，再运行 `launchctl kickstart gui/$(id -u)/edu.example.openenlink`。
 
+替换 `openenlink` 文件后（比如换成新版本），macOS 会询问一次 openenlink 能否使用它在钥匙串里的项目。`serve` 得到回答后才开始监听。选择“始终允许”。
+
 ## Windows 上的任务计划程序
 
 登录时启动的任务在你的会话里运行 `serve`，从凭据管理器读取授权。在 PowerShell 里填上文件路径：

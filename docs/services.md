@@ -119,6 +119,8 @@ launchctl bootout gui/$(id -u)/edu.example.openenlink
 
 A crash restarts `serve` after about 10 seconds. `launchctl print gui/$(id -u)/edu.example.openenlink` shows the state and the last exit status. After status 3 and `openenlink login`, run `launchctl kickstart gui/$(id -u)/edu.example.openenlink`.
 
+After you replace the `openenlink` file, for example with a new version, macOS asks once whether openenlink may use its keychain item. `serve` waits for the answer before it listens. Choose Always Allow.
+
 ## Windows with Task Scheduler
 
 A task that starts at sign-in runs `serve` in your session, where it reads the authorization from Credential Manager. In PowerShell, with the path to the file:
