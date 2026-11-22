@@ -63,6 +63,8 @@ An adapter lets `login` prompt for the username and password in the terminal and
 | ------------------ | -------------------------- | -------------------------------------------- | ---------------------------------------------- |
 | Soochow University | `https://wvpn.suda.edu.cn` | Username and password, captcha, `--remember` | [docs/adapters/suda.md](docs/adapters/suda.md) |
 
+Each adapter in the table is tested on its gateway.
+
 Other Enlink gateways that offer OIDC single sign-on work through a browser: `login` prints the sign-in URL, and you paste back the final redirect URL. Gateways that require SPA are unsupported.
 
 ## Documentation
