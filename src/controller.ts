@@ -5,6 +5,7 @@ import type Agent from "undici/lib/dispatcher/agent.js";
 import { object, text } from "./json.ts";
 import { ipv4Address } from "./protocol.ts";
 import type { Gateway } from "./tunnel.ts";
+import { printable } from "./web.ts";
 
 export class AuthenticationError extends Error {}
 export class PolicyError extends Error {}
@@ -116,7 +117,10 @@ export class Controller {
         typeof result.code === "string" && /^[\w-]{1,32}$/.test(result.code) ?
           result.code
         : "invalid";
-      throw new PolicyError(`Controller rejected ${url.pathname}, code ${code}`);
+      const reason = typeof result.messages === "string" ? printable(result.messages) : "";
+      throw new PolicyError(
+        [`Controller rejected ${url.pathname}, code ${code}`, reason].filter(Boolean).join(": "),
+      );
     }
     return object(result.data);
   }

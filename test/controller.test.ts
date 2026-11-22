@@ -108,6 +108,20 @@ await test("Controller recognizes expired sessions returned with HTTP 200", asyn
   }
 });
 
+await test("Controller rejections carry the server's message", async () => {
+  const controller = new Controller("https://vpn.example.test", {
+    fetch: () =>
+      Promise.resolve(Response.json({ code: "1001", messages: "Signed in\u001b[2J elsewhere" })),
+  });
+  try {
+    await assert.rejects(controller.user("taken"), {
+      message: "Controller rejected /enclient/api/users/info, code 1001: Signed in[2J elsewhere",
+    });
+  } finally {
+    await controller.close();
+  }
+});
+
 await test("Gateway policy selects the internal DNS", () => {
   const { gateways } = tunnelRules({
     gateway_list: [

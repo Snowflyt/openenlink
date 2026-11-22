@@ -18,7 +18,7 @@ A refused callback lands on the same page with a `state` parameter: Base64 JSON 
 | `GET /enclient/api/users/terminal/rules`      | `data.token` is the tunnel token, and `gateway_list` supplies endpoints. |
 | `GET /enclient/api/users/client/refreshToken` | Refresh-token Bearer authentication. Returns `token` and `refreshToken`. |
 
-Responses wrap results in `{code:"200",data:...}`. An expired authorization returns HTTP 401, or HTTP 200 with code `"401"` or `"3010"`.
+Responses wrap results in `{code:"200",data:...}`. An expired authorization returns HTTP 401, or HTTP 200 with code `"401"` or `"3010"`. Other codes carry the server's reason in `messages`. The official web client refreshes the token only for `"3010"`. For codes such as `"1000"` and `"1001"` it shows `messages` and returns to the sign-in page.
 
 Each gateway's `ip` field encodes `publicHost:port||internalAddress||internalPort`. When `internalDnsResolveStatus` is `"true"`, its `dns` field overrides the DNS address in the data-channel handshake.
 
