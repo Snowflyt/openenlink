@@ -143,6 +143,8 @@ async function main(): Promise<void> {
         values.browser ?
           { credentials: await browserSignIn(entry, config.userAgent), cookies: [] }
         : await signIn(entry, config, values.user);
+      // A stale pasted authorization fails here, before it replaces what is saved.
+      const user = await controller.user(credentials.accessToken);
       await store.save(credentials);
       if (values.remember && account) await store.savePassword({ ...account, cookies });
       else await store.clearPassword();
@@ -156,7 +158,7 @@ async function main(): Promise<void> {
           );
         });
       }
-      console.log(`Signed in as ${await controller.user(credentials.accessToken)}`);
+      console.log(`Signed in as ${user}`);
       if (values.remember && !account)
         console.log("A browser sign-in leaves no password to remember for serve.");
       console.log(`Authorization saved in ${where}. Run openenlink serve to connect.`);
