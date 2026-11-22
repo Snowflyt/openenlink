@@ -172,7 +172,7 @@ export function tunnelRules(rules: Record<string, unknown>): {
   gateways: Gateway[];
 } {
   if (rules.spa_status === true)
-    throw new PolicyError("This server requires SPA; its handshake is still being implemented");
+    throw new PolicyError("This server requires SPA, which openenlink does not support");
   if (!Array.isArray(rules.gateway_list))
     throw new Error("Controller did not return a gateway list");
   const gateways = rules.gateway_list.map((entry) => {
