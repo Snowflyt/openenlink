@@ -125,6 +125,9 @@ export async function login(entry: URL, options: LoginOptions): Promise<SignIn> 
       const retry = next && (await options.account(origin, failure.message));
       if (!next || !retry) throw new WrongPassword(failure.message);
       account = retry;
+    } else if (failure.reason === "captcha" && !options.captcha) {
+      // Another post would only repeat the rejected one.
+      throw new AuthenticationError("The sign-in page asks for a captcha; run openenlink login");
     } else if (!next || ++misses === CAPTCHA_ATTEMPTS) {
       throw new AuthenticationError(failure.message);
     }

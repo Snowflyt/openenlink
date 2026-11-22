@@ -24,6 +24,8 @@ const cas = {
   captcha: false,
   // A wrong password turns the captcha on, as the real page does after failures.
   captchaAfterMiss: false,
+  // Replies keep the captcha cookie while the captcha is on.
+  captchaCookie: true,
   missMessage: "您输入的用户名或密码错误",
   rejectCodes: false,
   // Where a right password leads instead of the ticket, such as a forced password change.
@@ -103,7 +105,7 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
   const html = (status: number, body: string) => {
     response.writeHead(status, {
       "Content-Type": "text/html",
-      ...(cas.captcha ? { "Set-Cookie": "SSO_X_CAPTCHA=1; Path=/" } : {}),
+      ...(cas.captcha && cas.captchaCookie ? { "Set-Cookie": "SSO_X_CAPTCHA=1; Path=/" } : {}),
     });
     response.end(body);
   };
@@ -170,6 +172,7 @@ function reset() {
     form: "normal",
     captcha: false,
     captchaAfterMiss: false,
+    captchaCookie: true,
     missMessage: "您输入的用户名或密码错误",
     rejectCodes: false,
     landing: "",
@@ -337,6 +340,14 @@ await test("Stop a sign-in without a captcha prompt when a post brings a captcha
     }),
     /asks for a captcha/,
   );
+  assert.equal(cas.posts.length, 1);
+});
+
+await test("Stop a sign-in without a captcha prompt at a captcha rejection", async () => {
+  reset();
+  cas.captcha = true;
+  cas.captchaCookie = false;
+  await assert.rejects(login(entry, { account: typed([]) }), /asks for a captcha/);
   assert.equal(cas.posts.length, 1);
 });
 
