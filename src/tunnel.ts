@@ -124,14 +124,13 @@ export class Tunnel {
       }
     };
 
+    // The interface stays until the worker ends, so the connections the worker closes next can
+    // still send their last packets through it.
     try {
       await Promise.race([send(), receive()]);
     } finally {
       this.close();
       clearInterval(heartbeat);
-      await outgoing.cancel();
-      writer.releaseLock();
-      await this.stack.interfaces.remove(nic);
     }
   }
 
