@@ -64,6 +64,9 @@ export async function serve(
       } catch (error) {
         signal.throwIfAborted();
         if (error instanceof AuthenticationError || error instanceof PolicyError) throw error;
+        // A local port that is taken or not allowed stays so on the next attempt.
+        const { syscall } = error as { syscall?: unknown };
+        if (syscall === "listen" || syscall === "bind") throw error;
         log.error(error instanceof Error ? error.message : "Connection failed");
       }
       signal.throwIfAborted();
