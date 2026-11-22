@@ -83,7 +83,10 @@ async function serve(
   const reader = new ByteReader(socket);
   const first = await reader.peek();
   // A client that closes before its first byte, such as a port check, made no connection.
-  if (first === undefined) return;
+  if (first === undefined) {
+    socket.end();
+    return;
+  }
   // A SOCKS5 greeting starts with version byte 5, an HTTP request with a method name.
   const session = first === 5 ? serveSocks : serveHttp;
   await session(socket, reader, flow, stack, resolver, controller.signal, authorize);
