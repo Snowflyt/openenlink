@@ -96,7 +96,10 @@ export async function login(entry: URL, options: LoginOptions): Promise<SignIn> 
   // provider starts after failures is shown rather than left behind with a fresh session.
   for (let misses = 0; ;) {
     let answer: string | undefined;
-    if (form.captcha && options.captcha) {
+    if (form.captcha) {
+      // A captcha can first appear on the page that answers a post.
+      if (!options.captcha)
+        throw new AuthenticationError("The sign-in page asks for a captcha; run openenlink login");
       answer = await options.captcha(await form.captcha());
       if (!answer) throw new UnsupportedLogin("");
     }

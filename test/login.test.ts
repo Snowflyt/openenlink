@@ -326,6 +326,20 @@ await test("Ask for the captcha again after a wrong answer", async () => {
   );
 });
 
+await test("Stop a sign-in without a captcha prompt when a post brings a captcha", async () => {
+  reset();
+  await assert.rejects(
+    login(entry, {
+      account: (origin, failure) => {
+        cas.captcha = true;
+        return typed([])(origin, failure);
+      },
+    }),
+    /asks for a captcha/,
+  );
+  assert.equal(cas.posts.length, 1);
+});
+
 await test("Read what a browser sign-in left behind", async () => {
   reset();
   const expected = { accessToken: "access-token" };
