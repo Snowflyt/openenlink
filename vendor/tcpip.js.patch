@@ -271,7 +271,7 @@ index e44e7e1..e7c590e 100644
  
      return hooks;
 diff --git a/packages/tcpip/wasm/include/lwipopts.h b/packages/tcpip/wasm/include/lwipopts.h
-index f756c7f..feb2d01 100644
+index f756c7f..8454138 100644
 --- a/packages/tcpip/wasm/include/lwipopts.h
 +++ b/packages/tcpip/wasm/include/lwipopts.h
 @@ -18,7 +18,7 @@
@@ -283,7 +283,7 @@ index f756c7f..feb2d01 100644
  #define PBUF_POOL_BUFSIZE TYPICAL_PACKET_SIZE    // Size of each pbuf in the pool (in bytes)
  #define MEMP_NUM_TCP_SEG (2 * TCP_SND_QUEUELEN)  // Number of TCP segments in the pool
  #define MEMP_NUM_PBUF (2 * MEMP_NUM_TCP_SEG)     // Number of pbufs in the pool
-@@ -49,8 +49,12 @@
+@@ -49,8 +49,15 @@
  #define LWIP_TCP 1                                    // Enable TCP functionality
  #define LWIP_TCP_TIMESTAMPS 1                         // Enable TCP timestamps (needed by Linux)
  #define TCP_MSS 1460                                  // Maximum segment size
@@ -295,6 +295,9 @@ index f756c7f..feb2d01 100644
 +#define TCP_SND_BUF (128 * TCP_MSS)                   // TCP send buffer size
 +#define TCP_SNDLOWAT (16 * TCP_MSS)                   // Keep below the u16_t limit lwIP checks
 +#define LWIP_TCP_RTO_TIME 1000                        // Initial retransmission timeout (ms)
++#include <stdint.h>                                   // For arc4random
++uint32_t arc4random(void);                            // In wasi-libc, declared only with _BSD_SOURCE
++#define LWIP_RAND() ((u32_t)arc4random())             // Each new stack starts at a random local port
  #define TCP_SND_QUEUELEN (2 * TCP_SND_BUF / TCP_MSS)  // TCP send queue length
  #define MEMP_NUM_TCP_PCB 256                          // Number of simultaneously active TCP PCBs
  #define MEMP_NUM_TCP_PCB_LISTEN 256                   // Number of simultaneously active listening TCP PCBs

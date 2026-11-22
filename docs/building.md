@@ -37,6 +37,7 @@ The patch fixes faults that let one lost packet stall or corrupt a connection:
 | WASM       | Copies incoming packets before lwIP queues them.                                     |
 | WASM       | Uses a 182 KiB window with window scaling, up from 5.6 KiB.                          |
 | WASM       | Starts retransmission after 1 second, down from 3 seconds.                           |
+| WASM       | Picks a random first local port in each new stack, not always 49153.                 |
 
 To change the stack, edit the files in `vendor/tcpip.js`, save the patch and rebuild:
 
