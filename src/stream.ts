@@ -61,6 +61,20 @@ export class ByteReader {
   }
 }
 
+// Errors from a socket whose peer reset or abandoned the connection. Reading from or writing to the
+// socket once it is destroyed fails with the last two.
+const LEFT = new Set([
+  "ECONNRESET",
+  "EPIPE",
+  "ECONNABORTED",
+  "ERR_STREAM_PREMATURE_CLOSE",
+  "ERR_STREAM_DESTROYED",
+]);
+
+export function peerLeft(error: unknown): boolean {
+  return error instanceof Error && "code" in error && LEFT.has(String(error.code));
+}
+
 export function write(stream: Writable, data: Uint8Array): Promise<void> {
   return new Promise((resolve, reject) => {
     stream.write(data, (error) => (error ? reject(error) : resolve()));

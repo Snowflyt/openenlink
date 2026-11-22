@@ -9,7 +9,7 @@ import type { NetworkStack } from "#tcpip";
 import type { Resolver } from "./dns.ts";
 import * as log from "./log.ts";
 import { relay } from "./relay.ts";
-import { ByteReader } from "./stream.ts";
+import { ByteReader, peerLeft } from "./stream.ts";
 
 export type Forward = { port: number; host: string; hostPort: number; udp: boolean };
 
@@ -58,7 +58,10 @@ async function forwardTcp(
     void (async () => {
       const host = await resolver.lookup(rule.host, controller.signal);
       const connection = await stack.tcp.connect({ host, port: rule.hostPort });
-      await relay(socket, reader, connection, {});
+      // relay destroys the client socket however it ends, so only the error tells who failed.
+      await relay(socket, reader, connection, {}).catch((error: unknown) => {
+        if (!peerLeft(error)) report(rule, error);
+      });
     })().catch((error: unknown) => {
       if (!socket.destroyed) report(rule, error);
       socket.destroy();
