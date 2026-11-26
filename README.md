@@ -13,14 +13,15 @@ A command-line client for the Enlink VPN gateways used by EnUES and EnAgent, pro
 
 Download the file for your system. Each link fetches it from the [latest release](https://github.com/Snowflyt/openenlink/releases/latest).
 
-| System               | File                                                                                                                         |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Windows x64          | [`openenlink-windows-x64.exe`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-windows-x64.exe)   |
-| macOS, Apple silicon | [`openenlink-darwin-arm64`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-darwin-arm64)         |
-| Linux x64            | [`openenlink-linux-x64-gnu`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-x64-gnu)       |
-| Linux arm64          | [`openenlink-linux-arm64-gnu`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-arm64-gnu)   |
-| Alpine Linux x64     | [`openenlink-linux-x64-musl`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-x64-musl)     |
-| Alpine Linux arm64   | [`openenlink-linux-arm64-musl`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-arm64-musl) |
+| System               | File                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Windows x64          | [`openenlink-windows-x64.exe`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-windows-x64.exe)     |
+| Windows arm64        | [`openenlink-windows-arm64.exe`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-windows-arm64.exe) |
+| macOS, Apple silicon | [`openenlink-darwin-arm64`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-darwin-arm64)           |
+| Linux x64            | [`openenlink-linux-x64-gnu`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-x64-gnu)         |
+| Linux arm64          | [`openenlink-linux-arm64-gnu`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-arm64-gnu)     |
+| Alpine Linux x64     | [`openenlink-linux-x64-musl`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-x64-musl)       |
+| Alpine Linux arm64   | [`openenlink-linux-arm64-musl`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-arm64-musl)   |
 
 Rename the file to `openenlink`, or `openenlink.exe` on Windows. On macOS and Linux, make it executable:
 

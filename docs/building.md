@@ -2,7 +2,7 @@
 
 ## Run from source
 
-Install Node.js 26.9 or newer, Git, curl and tar. The build runs on macOS, Linux x64 and arm64 with glibc, and Windows x64, the systems wasi-sdk has releases for. Then:
+Install Node.js 26.9 or newer, Git, curl and tar. The build runs on macOS, Linux x64 and arm64 with glibc, and Windows x64 and arm64, the systems wasi-sdk 24 runs on. Windows arm64 runs its x64 release. Then:
 
 ```sh
 git clone --recursive https://github.com/Snowflyt/openenlink.git

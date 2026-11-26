@@ -71,7 +71,7 @@ jobs:
   keyring:
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest, windows-11-arm]
 
     runs-on: ${{ matrix.os }}
     env:
@@ -116,6 +116,9 @@ jobs:
             alpine: true
           - os: windows-latest
             target: windows-x64
+            exe: .exe
+          - os: windows-11-arm
+            target: windows-arm64
             exe: .exe
 
     runs-on: ${{ matrix.os }}

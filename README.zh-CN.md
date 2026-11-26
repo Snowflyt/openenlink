@@ -13,14 +13,15 @@
 
 下载对应系统的文件。每个链接取自[最新发布](https://github.com/Snowflyt/openenlink/releases/latest)。
 
-| 系统               | 文件                                                                                                                         |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| Windows x64        | [`openenlink-windows-x64.exe`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-windows-x64.exe)   |
-| macOS，Apple 芯片  | [`openenlink-darwin-arm64`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-darwin-arm64)         |
-| Linux x64          | [`openenlink-linux-x64-gnu`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-x64-gnu)       |
-| Linux arm64        | [`openenlink-linux-arm64-gnu`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-arm64-gnu)   |
-| Alpine Linux x64   | [`openenlink-linux-x64-musl`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-x64-musl)     |
-| Alpine Linux arm64 | [`openenlink-linux-arm64-musl`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-arm64-musl) |
+| 系统               | 文件                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Windows x64        | [`openenlink-windows-x64.exe`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-windows-x64.exe)     |
+| Windows arm64      | [`openenlink-windows-arm64.exe`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-windows-arm64.exe) |
+| macOS，Apple 芯片  | [`openenlink-darwin-arm64`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-darwin-arm64)           |
+| Linux x64          | [`openenlink-linux-x64-gnu`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-x64-gnu)         |
+| Linux arm64        | [`openenlink-linux-arm64-gnu`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-arm64-gnu)     |
+| Alpine Linux x64   | [`openenlink-linux-x64-musl`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-x64-musl)       |
+| Alpine Linux arm64 | [`openenlink-linux-arm64-musl`](https://github.com/Snowflyt/openenlink/releases/latest/download/openenlink-linux-arm64-musl)   |
 
 把文件改名为 `openenlink`，Windows 上是 `openenlink.exe`。macOS 和 Linux 上加上执行权限：
 
